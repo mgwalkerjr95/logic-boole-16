@@ -26,6 +26,9 @@ writes them through a FIFO of 8192 words into the FX3's synchronous slave FIFO. 
   kept is the one from just before the edge.
 - **Glitch filter.** For each input, a change counts once the input has held its new level for N samples of 5 ns,
   N up to 250 (1.25 µs). All inputs are then delayed alike, so edges keep their places against each other.
+- **The Raspberry Pi's lines.** Nine pins of the Pi's header (I2C1, the UART, SPI0) reach the FPGA through the
+  board's solder jumpers. Each can take the place of one probe, A0 to A7 and B0, and is then sampled, filtered
+  and triggered on like a probe. A Pi line is 3.3 V logic with no threshold.
 - **Registers.** The FX3 writes the settings (divider, sample limit, format, thresholds, trigger, capture clock,
   filters) and reads the status and the counts over I2C at address 0x2A. One line from the FX3, RUN, starts and
   ends a capture.
@@ -62,11 +65,11 @@ The simulation needs [Icarus Verilog](https://steveicarus.github.io/iverilog/): 
 
     sh sim.sh
 
-It prints one line for each of its 41 runs and ends with `PASS`. The runs go side by side, as many at once as
+It prints one line for each of its 42 runs and ends with `PASS`. The runs go side by side, as many at once as
 the computer has processor cores: about eight minutes on a laptop with eight, and 50 minutes of processor time.
 `sh sim.sh 1` runs them one at a time. The output of every run is in `sim/build/capture2_tb.log`.
 
-The test bench is in ten parts, one run each. The first does 37 captures and checks:
+The test bench is in eleven parts, one run each. The first does 37 captures and checks:
 
 - the registers: the identity, the values they start with, writing and reading back, several bytes in one read,
   no answer to another I2C address, and the duty cycles of the two threshold outputs
@@ -89,7 +92,7 @@ The test bench is in ten parts, one run each. The first does 37 captures and che
   high and low for at least 4 ns each
 - that no word is written while the FX3 has no buffer for it
 
-The other nine parts check the trigger, the capture clock and the glitch filter. In each capture the test bench
+The other ten parts check the trigger, the capture clock, the glitch filter and the Pi's lines. In each capture the test bench
 works out for itself, sample by sample, which sample must be the trigger sample or which samples must be kept,
 and compares the words that reach the FX3 with that:
 
@@ -106,6 +109,10 @@ and compares the words that reach the FX3 with that:
   clock at all
 - the glitch filter against a model that filters the same inputs one sample at a time, with different lengths
   on different inputs, at 250 samples, and switched off again
+- the Pi's lines: a count that goes up every 5 ns is put on the 16 inputs, with each bit on the Pi's line where
+  register 2E says so and on the probe where it does not, and the wrong level on the other of the two. The
+  samples must be the count, whole and in order, with all nine lines, none, two mixed sets and each line alone.
+  Then a trigger on a Pi line's rising edge behind a glitch filter that removes a short pulse on it
 
 The next 30 runs repeat the first two captures with the FX3's flag arriving 0 to 8 clock cycles late and its
 edge 0.6 to 13 ns after the clock's. The design must not depend on either. The last run shortens the design's
@@ -161,19 +168,20 @@ the published bitstream.
 
 ## The published bitstream
 
-`../software/logicboole/data/gateware.bin` is this design, built with ISE 14.7 by the commands in `build.sh`.
+`../software/logicboole/data/gateware.bin` is this design, version 5, built with ISE 14.7 by the commands in
+`build.sh`.
 
 | | |
 |---|---|
 | Size | 340,604 bytes |
-| SHA-256 | `e802dd41145d9e164c4b4f03206dffc4e1068fd2b06f39a8c7ac746782911757` |
+| SHA-256 | `5adb86c249ad0b5d9d0a2d98edcca7f78d4d456028b3463b430030eac8ef9dd6` |
 | Timing errors | 0 |
-| 100 MHz clock (10 ns period) | Minimum period 9.425 ns: 0.575 ns of setup slack. Hold slack 0.405 ns |
-| Slice registers | 3,370 of 11,440 (29%) |
-| Slice LUTs | 5,315 of 5,720 (92%), 159 of them as the glitch filter's shift registers |
-| Occupied slices | 1,422 of 1,430 (99%) |
+| 100 MHz clock (10 ns period) | Minimum period 9.431 ns: 0.569 ns of setup slack. Hold slack 0.396 ns |
+| Slice registers | 3,379 of 11,440 (29%) |
+| Slice LUTs | 5,299 of 5,720 (92%), 159 of them as the glitch filter's shift registers |
+| Occupied slices | 1,415 of 1,430 (98%) |
 | Block RAM | 16 of 32 RAMB16 (50%): the FIFO, 8192 words of 32 bits |
-| Input flip-flops | Both flip-flops of each of the 16 inputs are in its pad (IDDR2) |
+| Input flip-flops | Both flip-flops of each of the 16 inputs, of TRIG IN and of the nine Pi lines are in its pad (IDDR2) |
 | Clock buffers | 2 of 16 |
 | PLLs | 1 of 2 |
 | Pins | 83 of 102 |
@@ -186,7 +194,10 @@ To check the file (on macOS the command is `shasum -a 256`):
 
     sha256sum ../software/logicboole/data/gateware.bin
 
-**On a board.** With this bitstream on one board, connected to a Mac:
+**On a board.** Version 5 has passed the simulation above and **has not yet run on a board**. It differs from
+version 4 in one place: a selector in front of nine of the inputs, for the Pi's lines. The Pi's lines themselves
+have not been captured on a board either. What follows was measured with version 4 on one board, connected to
+a Mac:
 
 - `logicboole selftest` passes: 34 captures of the test pattern with every word compared, among them 600 million
   samples at 200 MS/s, and 200 million samples at 200 MS/s that make 50 million words a second. Eight of them wait

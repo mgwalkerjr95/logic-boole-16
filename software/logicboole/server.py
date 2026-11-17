@@ -12,6 +12,7 @@ pages themselves, which also make simulated signals, so the app is of use with n
     POST /api/capture    ?rate=&seconds=&test=&a=&b=   start a capture.  More, each as the command line has it:
                          trigger= ("B7=f then B0=r": the capture waits for it and its length counts from it),
                          before= (seconds from before the trigger to keep) or samples_before=, glitch= ("50ns"),
+                         pi= (the Raspberry Pi's lines in place of probes: "i2c", "uart", "spi", "all"),
                          samples= (the length as a number of samples, in place of seconds=),
                          clock= ("A0=r": a sample at each such edge; the length is then samples=)
     POST /api/stop       end the capture that is running: what it has is kept
@@ -87,7 +88,7 @@ class App:
         return True
 
     def _run(self, rate, seconds, test, a, b, trigger=None, before=None, samples=None, samples_before=None,
-             clock=None, glitch=None):
+             clock=None, glitch=None, pi=None):
         def progress(part):                 # None: the capture waits for its trigger
             self.job["waiting"] = part is None
             if part is not None:
@@ -97,7 +98,7 @@ class App:
                 cap = board.capture(rate=rate, seconds=seconds, samples=samples, fmt="rle",
                                     test=TEST_SHIFT if test else None, a=a, b=b, max_bytes=MAX_BYTES,
                                     progress=progress, trigger=trigger, before=before,
-                                    samples_before=samples_before, clock=clock, glitch=glitch,
+                                    samples_before=samples_before, clock=clock, glitch=glitch, pi=pi,
                                     cancel=lambda: self.stop)
             self.data = cap.words
             self.job = {"state": "done", "got": 1000, "want": 1000, "bytes": len(cap.words), "rate": cap.rate,
@@ -105,7 +106,8 @@ class App:
                         "thresholds": cap.thresholds, "overflow": cap.overflow, "stopped": cap.stopped,
                         "problems": cap.problems, "usb": cap.info["usb"], "words": cap.info["words"],
                         "trigger": cap.info.get("trigger"), "trigger_sample": cap.trigger,
-                        "clock": cap.info.get("clock"), "glitch_ns": cap.info.get("glitch_ns")}
+                        "clock": cap.info.get("clock"), "glitch_ns": cap.info.get("glitch_ns"),
+                        "pi": cap.info.get("pi")}
         except (B.BoardError, usb.UsbError) as e:
             self.job = {"state": "error", "error": str(e)}
         except T.TriggerError as e:
@@ -247,6 +249,8 @@ def handler(app):
                     rate = B.nearest_rate(rate)[1]
                     glitch = T.parse_filter(q["glitch"]) if q.get("glitch") else None
                     T.filter_samples(glitch)
+                    pi = q.get("pi") or None
+                    T.pi_lines(pi)
                     trigger = q.get("trigger") or None
                     if trigger:
                         T.parse(trigger, None if clock else rate)
@@ -271,7 +275,8 @@ def handler(app):
                 except B.BoardError as e:
                     return self.reply(400, {"error": str(e)})
                 if not app.start(rate=rate, seconds=seconds, test=q.get("test") == "1", a=a, b=b, trigger=trigger,
-                                 before=before, samples=samples, samples_before=ahead, clock=clock, glitch=glitch):
+                                 before=before, samples=samples, samples_before=ahead, clock=clock, glitch=glitch,
+                                 pi=pi):
                     return self.reply(409, {"error": "the board is busy"})
                 return self.reply(202, app.status())
             if url.path == "/api/stop":

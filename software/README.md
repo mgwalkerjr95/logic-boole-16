@@ -156,6 +156,7 @@ takes 2 seconds at 10 MS/s with pod A's threshold at 1.65 V and pod B's at 0.9 V
 | `--timeout TIME` | With `--trigger`: stop waiting after this long |
 | `--clock INPUT=EDGE` | A sample at each edge of one input, the circuit's own clock, in place of the sample rate. See below |
 | `--glitch TIME` | A glitch filter: `20ns` for every input, or `A0=20ns,B=1us` for a channel and a pod |
+| `--pi LINES` | Lines of the Raspberry Pi the board sits on, in place of probes: `i2c`, `uart`, `spi`, `all`, or single lines. See below |
 | `--json` | The result as JSON |
 
 Ctrl-C ends a capture early and keeps what it has.
@@ -201,6 +202,33 @@ time, and inputs that changed about 5 ns before it were not.
 for 50 ns, and shorter pulses are removed before the samples are kept and before the trigger sees them. The
 longest is 1.25 µs, in steps of 5 ns. Every input is delayed by the same time, so their edges keep their places
 against each other.
+
+**The Raspberry Pi's lines.** On a Pi, nine pins of the Pi's header reach the board's FPGA: I2C1, the UART and
+SPI0. With `--pi`, a capture takes them in place of probes, with no leads:
+
+| `--pi` | Line | In place of | Solder jumper |
+|---|---|---|---|
+| `i2c` | GPIO2, SDA | A0 | JP2 |
+| | GPIO3, SCL | A1 | JP3 |
+| `uart` | GPIO14, TXD | A2 | JP9 |
+| | GPIO15, RXD | A3 | JP10 |
+| `spi` | GPIO10, MOSI | A4 | JP7 |
+| | GPIO9, MISO | A5 | JP6 |
+| | GPIO11, SCLK | A6 | JP8 |
+| | GPIO8, CE0 | A7 | JP5 |
+| | GPIO7, CE1 | B0 | JP4 |
+
+`--pi all` takes all nine, and single lines go by either name: `--pi scl,gpio14`. The other channels stay probes.
+Each line's solder jumper has to be closed, because the board is shipped with all of them open and an open one
+reads low. A Pi line is 3.3 V logic and the pod's threshold does not act on it. The trigger, the capture clock
+and the glitch filter work on it under the channel's name (`A0=f` here: SDA falls). The saved files name the
+channel after the line, SDA, SCL, TXD and so on, and `decode` takes those names:
+
+    ./logicboole capture i2c.sr --rate 2M --time 1 --pi i2c --trigger "A0=f A1=1" --timeout 30
+    ./logicboole decode i2c.sr i2c scl=SCL sda=SDA
+
+This is in the FPGA's design from version 5 on. It has passed the design's simulation and the software's tests
+with the stand-in board; **it has not yet run on a board.**
 
 **How much the board carries.** The board sends a word for every change of the inputs, or with `--raw` a word
 for every two samples, and a little under 100 million words a second can leave it. On one board, a 48 MHz
@@ -342,7 +370,7 @@ for a in found["annotations"]:
 | `logicboole.connect()` | The board, loaded and ready, as a `Board` |
 | `logicboole.look()` | What is on USB, without changing anything |
 | `Board.capture(rate, seconds, samples, fmt, test, a, b, ...)` | One capture, as a `Capture` |
-| `Board.capture(..., trigger, before, samples_before, timeout, clock, glitch)` | The same with a trigger, a capture clock or a glitch filter: the command line's options |
+| `Board.capture(..., trigger, before, samples_before, timeout, clock, glitch, pi)` | The same with a trigger, a capture clock, a glitch filter or the Pi's lines: the command line's options |
 | `Board.set_thresholds(a, b)`, `Board.thresholds()` | Volts at the probe |
 | `Board.inputs()` | The 16 inputs now, bit 0 is A0 and bit 15 is B7 |
 | `Board.read(register, n)`, `Board.write(register, data)` | The FPGA's registers |
@@ -425,7 +453,7 @@ shorter than asked for and whole up to its last sample: there are no gaps inside
 | `logicboole/usb.py` | libusb through ctypes: vendor requests and the queued reads of the bulk endpoint |
 | `logicboole/board.py` | Loading the board, its registers and thresholds, and the steps of a capture |
 | `logicboole/words.py` | The two formats of the stream, and the test pattern |
-| `logicboole/trigger.py` | The trigger, the capture clock and the glitch filter: their text, and the FPGA's registers |
+| `logicboole/trigger.py` | The trigger, the capture clock, the glitch filter and the Pi's lines: their text, and the FPGA's registers |
 | `logicboole/capture.py` | A finished capture, the file formats, and the measuring |
 | `logicboole/decode.py` | sigrok's decoders on a saved capture: what `sigrok-cli` is asked, and what it answers |
 | `logicboole/cli.py` | The command line |

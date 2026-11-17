@@ -3,8 +3,8 @@
 # SPDX-License-Identifier: CERN-OHL-S-2.0
 #
 # Simulates capture2_top.v with Icarus Verilog against a model of the FX3's slave FIFO and an I2C master: prints
-# PASS or FAIL.  The whole test runs once, as ten parts side by side (the captures of design 3, then one part for
-# each group of captures with a trigger, a capture clock or a glitch filter).  Its first two captures are then
+# PASS or FAIL.  The whole test runs once, as eleven parts side by side (the captures of design 3, then one part for
+# each group of captures with a trigger, a capture clock, a glitch filter or the Pi's lines).  Its first two captures are then
 # repeated with the FX3's flag from 0 to 8 cycles late and its edge anywhere in the clock cycle, because the design
 # must not depend on either.  The last run shortens the design's hold-off to less than the flag's delay: the model
 # must then report overruns, which shows that it would catch them.  The compiled test benches and the log of
@@ -36,7 +36,7 @@ run() {     # run WANT PARAMETERS...   in the background; what it said goes to s
     ) &
     [ $((n % AT_ONCE)) -ne 0 ] || wait
 }
-for part in 12 13 15 1 14 16 17 18 19 20; do     # the longest first
+for part in 12 13 15 1 14 16 17 18 19 20 21; do     # the longest first
     run PASS LAT=3 FLAG_DELAY=7.0 ONLY=$part
 done
 for lat in 0 1 2 4 6 8; do

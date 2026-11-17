@@ -1165,6 +1165,7 @@ async function captureDevice() {
   if ($('trigCh').value === 'text' && !trigWords) throw new Error('No capture was made. The trigger is "other…" and its text is empty: B0=r, or A0=1 for 10us, or B7=f then B0=r.');
   if (trigWords) { q.set('trigger', trigWords); q.set('samples_before', String(Math.round(+$('trigBefore').value * count))); }
   if ($('glitch').value.trim()) q.set('glitch', $('glitch').value.trim());
+  if ($('pi').value.trim()) q.set('pi', $('pi').value.trim());
   progress(0, 'Capturing');
   const r = await post('/api/capture?' + q);
   if (!r.ok) throw new Error((await r.json()).error || 'the capture did not start');
@@ -1202,7 +1203,8 @@ async function captureDevice() {
   const [ckCh, ckEdge] = (meta.clock || '=').split('=');
   const how = `${meta.clock ? `${plural(cap.numSamples, 'sample')}, one at each ${EDGE[ckEdge]} of ${ckCh},` : `${fmtTime(cap.numSamples / meta.rate)} at ${fmtRate(meta.rate)}`} in ${plural(w.length, 'word')} (${(buf.byteLength / 1e6).toFixed(2)} MB), USB at ${meta.usb}`;
   const asked = meta.clock ? plural(meta.asked, 'sample') : fmtTime(meta.asked / meta.rate);
-  const extra = glitchNote(meta.glitch_ns) + (meta.clock ? ` The times shown are sample numbers at ${fmtRate(meta.rate)}.` : '');
+  const piNote = meta.pi ? ` The Pi's lines: ${Object.entries(meta.pi).map(([ch, line]) => `${ch} is ${line}`).join(', ')}.` : '';
+  const extra = piNote + glitchNote(meta.glitch_ns) + (meta.clock ? ` The times shown are sample numbers at ${fmtRate(meta.rate)}.` : '');
   const triggered = meta.trigger_sample != null;
   const short = meta.overflow ? ` The capture overflowed: the signals made more data than the board and USB carry, or the computer did not take it fast enough. It ends before the ${asked} asked for, and is whole up to its end.`
     : meta.stopped === 'size' ? ` The capture was ended before the ${asked} asked for: it had grown too large for the browser. A lower sample rate gives a longer one.`

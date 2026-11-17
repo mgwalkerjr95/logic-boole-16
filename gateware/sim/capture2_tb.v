@@ -21,7 +21,7 @@ module capture2_tb;
     parameter HOLD = 20;                // the design's parameter
     parameter START_WAIT = 300;
     parameter QUICK = 0;                // 1: the first two captures only
-    parameter ONLY = 0;                 // 1: only the captures before group 12; 12 ... 20: only that group
+    parameter ONLY = 0;                 // 1: only the captures before group 12; 12 ... 21: only that group
     localparam FIFO_BITS = 8;           // 256 words: small, so that the captures here fill it
     localparam DRAIN_MAX = 3000;
     localparam [6:0] ADDR = 7'h2A;
@@ -38,6 +38,9 @@ module capture2_tb;
     wire init_b;
     reg [15:0] pins = 16'hFFFF;         // the comparators' outputs, pod B's above pod A's: low = above the threshold
     reg trig_in = 0;
+    // the Pi's nine lines in the order of register 2E's bits: GPIO2, 3, 14, 15, 10, 9, 11, 8, 7.  1 = high
+    reg [8:0] pif = 9'd0;
+    reg [8:0] pi_sel = 9'd0;            // which of them the test has put in place of probes (register 2E)
     wire pwm_a, pwm_b, trig_out, led_arm, led_trig;
     wire [3:0] dbg;
     reg scl = 1, m_sda = 1;             // the master's side of the I2C bus
@@ -52,8 +55,8 @@ module capture2_tb;
         .fx3_ctl0(slcs_n), .fx3_ctl1(slwr_n), .fx3_ctl2(sloe_n), .fx3_ctl3(slrd_n), .fx3_ctl4(flaga_pin),
         .fx3_ctl5(ctl5), .fx3_ctl6(run), .fx3_ctl7(pktend_n), .fx3_ctl8(ctl8), .fx3_ctl11(a1),
         .fx3_ctl12(a0), .fx3_dq(dq), .fx3_scl(scl), .fx3_sda(sda), .init_b(init_b),
-        .pif_gpio2(), .pif_gpio3(), .pif_gpio7(), .pif_gpio8(), .pif_gpio9(), .pif_gpio10(), .pif_gpio11(),
-        .pif_gpio14(), .pif_gpio15());
+        .pif_gpio2(pif[0]), .pif_gpio3(pif[1]), .pif_gpio14(pif[2]), .pif_gpio15(pif[3]), .pif_gpio10(pif[4]),
+        .pif_gpio9(pif[5]), .pif_gpio11(pif[6]), .pif_gpio8(pif[7]), .pif_gpio7(pif[8]));
 
     integer errors = 0;
     task check(input ok, input [639:0] what);
@@ -380,13 +383,17 @@ module capture2_tb;
         end
     end
 
-    // the ramp: the probes show a count that goes up 2.5 ns after each edge of the design's clock, so every 5 ns
+    // the ramp: the probes show a count that goes up 2.5 ns after each edge of the design's clock, so every 5 ns.
+    // Where a Pi line stands in for a probe (pi_sel), the line has the count's bit and the probe has the wrong
+    // level; every other Pi line has the wrong level too.  So the count is whole only if the design takes each
+    // bit from where register 2E says.
     reg ramp = 0;
     reg [15:0] ramp_count = 0;
     always @(dut.clk) begin
         if (ramp) begin
             #2.5 ramp_count = ramp_count + 1'b1;
-            pins = ~ramp_count;
+            pins = ~ramp_count ^ {7'd0, pi_sel};
+            pif = ramp_count[8:0] ^ ~pi_sel;
         end
     end
 
@@ -751,7 +758,7 @@ module capture2_tb;
 
         // ---- the registers ----
         reg_read(8'h00, 4);
-        check(rd[31:0] == 32'h0416424C, "the identity is not 4C 42 16 04");
+        check(rd[31:0] == 32'h0516424C, "the identity is not 4C 42 16 05");
         reg_read(8'h0C, 4);
         check(rd[31:0] == {16'd2048, 16'd2048}, "the thresholds do not start at 2048");
         reg_read(8'h20, 2);
@@ -1547,6 +1554,71 @@ module capture2_tb;
             run = 0;
             wait_off(100);
             pins = 16'hFFFF;
+            end
+
+            // ---- 21: the Pi's lines in place of probes.  The count is on the probes and on the Pi's lines as
+            // the ramp says above: all nine lines, none, some, and one at a time ----
+            if (ONLY == 0 || ONLY == 21) begin
+            reg_read(8'h2E, 2);
+            check(rd[15:0] == 16'd0, "the Pi's lines are not off at the start");
+            reg_write(8'h2E, 16'hFFFF, 2);
+            reg_read(8'h2E, 2);
+            check(rd[15:0] == 16'h01FF, "register 2E does not keep its nine bits");
+            pif = 9'h155;
+            #100;
+            reg_read(8'h06, 2);
+            check(rd[15:0] == 16'h0155, "the inputs now, with the Pi's lines in place of A0 ... B0");
+            reg_write(8'h2E, 16'h0000, 2);
+            #100;
+            reg_read(8'h06, 2);
+            check(rd[15:0] == 16'h0000, "the inputs now, with the Pi's lines off again");
+            for (i = 0; i < 13; i = i + 1) begin
+                pi_sel = (i == 0) ? 9'h1FF : (i == 1) ? 9'h000 : (i == 2) ? 9'h0A5 : (i == 3) ? 9'h15A
+                         : 9'd1 << (i - 4);
+                reg_write(8'h2E, pi_sel, 2);
+                ramp = 1;
+                #100;
+                ramp_capture(24'd0, 4001);
+                if (i < 4)
+                    ramp_capture(24'd2, 2001);
+                ramp = 0;
+                #100;
+                pins = 16'hFFFF;
+                pif = 9'd0;
+            end
+            // run-length, a trigger on a Pi line's edge and a glitch filter on it: SCL (bit 1, in place of A1)
+            // rises 40 samples of 5 ns after the capture's start and has a pulse of 2 samples before that
+            pi_sel = 9'h003;
+            reg_write(8'h2E, pi_sel, 2);
+            filters({112'd0, 8'd4, 8'd0});
+            stage(0, 8'h00, 16'h0002, 16'h0002, 16'h0002, 16'h0000, 32'd0, 32'd0);
+            trigger(1, 16);
+            setup(8'h01, 24'd0, 40'd200, 16'd4096);
+            run = 1;
+            #((START_WAIT + 40) * 10);
+            @(dut.clk);
+            #2.5 pif[1] = 1'b1;
+            repeat (2) @(dut.clk);
+            #2.5 pif[1] = 1'b0;
+            repeat (30) @(dut.clk);
+            #2.5 pif[1] = 1'b1;
+            pins[1] = 1'b1;                     // the probe A1 itself stays below its threshold
+            wait_done(3000);
+            check(ex_trig > 0, "a trigger on a Pi line: none");
+            check(ex[ex_trig][1] === 1'b1 && ex[ex_trig - 1][1] === 1'b0, "a trigger on a Pi line: not at its rising edge");
+            ok = 1;
+            for (i = 0; i < ex_trig; i = i + 1)
+                if (ex[i][1] !== 1'b0)
+                    ok = 0;
+            check(ok, "a glitch filter on a Pi line: the short pulse came through");
+            compare_trig(1, "a trigger on a Pi line");
+            run = 0;
+            wait_off(100);
+            trigger(0, 0);
+            filters(128'd0);
+            pif = 9'd0;
+            pi_sel = 9'd0;
+            reg_write(8'h2E, 16'h0000, 2);
             end
         end
 

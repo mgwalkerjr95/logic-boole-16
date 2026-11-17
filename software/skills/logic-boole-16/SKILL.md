@@ -77,6 +77,7 @@ browser, and it does not return.
 | `--timeout` | With a trigger: stop waiting after this long (`10` is 10 seconds). Always give it |
 | `--glitch 50ns` | A change counts once the input held its new level this long (10 ns to 1.25 us) |
 | `--clock A0=r` | One sample at each rising edge of A0, in place of the sample rate (with `-n`) |
+| `--pi i2c` | Only with the board on a Raspberry Pi and its solder jumpers closed: the Pi's own lines in place of probes. `i2c` (SDA on A0, SCL on A1), `uart` (TXD A2, RXD A3), `spi` (MOSI A4, MISO A5, SCLK A6, CE0 A7, CE1 B0), `all`. An open jumper reads low |
 | `--raw` | Every sample, not only the changes: for signals that change at nearly every sample |
 
 **Which rate.** At least 4 times the fastest signal's bit rate to decode it, 10 times or more to measure its

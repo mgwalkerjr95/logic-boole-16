@@ -17,7 +17,7 @@ import time
 import urllib.request
 
 from . import trigger as T, usb, words as W
-from .capture import Capture
+from .capture import CHANNELS, Capture
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 FIRMWARE = os.path.join(HERE, "data", "firmware.img")      # an image put here is used as it is ("make install")
@@ -375,6 +375,8 @@ class Board:
                 "fifo_bits": r[43], "fastest": (r[44] or 100) * 1e6, "locked": r[5] & 1, "run": r[5] >> 1 & 1,
                 "sampling": r[5] >> 2 & 1, "done": r[5] >> 3 & 1, "overflow": r[5] >> 4 & 1, "state": r[5] >> 5,
                 # the trigger and the capture clock: a design before version 4 has none, and reads 0 here
+                # the Pi's lines in place of probes: a design before version 5 has none, and reads 0 here
+                "pi": n(0x2E, 0x30),
                 "stages": r[0x2D], "clock": r[0x30], "stages_used": r[0x31], "keep": n(0x32, 0x34),
                 "triggered": r[0x34] & 1, "trigger_sent": r[0x34] >> 1 & 1, "trigger_upper": r[0x34] >> 2 & 1,
                 "waiting": r[0x34] >> 3 & 1, "stages_met": r[0x34] >> 4 & 7, "words_before": n(0x36, 0x38)}
@@ -454,7 +456,7 @@ class Board:
 
     def capture(self, rate=1e6, seconds=1.0, samples=None, fmt="rle", test=None, a=None, b=None,
                 max_bytes=MAX_BYTES, progress=None, cancel=None, trigger=None, before=None,
-                samples_before=None, timeout=None, clock=None, glitch=None):
+                samples_before=None, timeout=None, clock=None, glitch=None, pi=None):
         """One capture, as a Capture.
 
         rate        samples a second; the board takes the nearest of 200 MS/s / 1, / 2, / 3 ...
@@ -490,6 +492,13 @@ class Board:
         glitch      a glitch filter: seconds (10 ns ... 1.25 us) for every input, or a dict such as
                     {"A0": 20e-9, "B": 1e-6} (a channel, a pod or "all").  A change of an input counts once the
                     input has held its new level for that long; shorter pulses are left out
+        pi          lines of the Raspberry Pi the board sits on, in place of probes: "i2c" (GPIO2 SDA for A0,
+                    GPIO3 SCL for A1), "uart" (GPIO14 TXD for A2, GPIO15 RXD for A3), "spi" (GPIO10 MOSI for A4,
+                    GPIO9 MISO for A5, GPIO11 SCLK for A6, GPIO8 CE0 for A7, GPIO7 CE1 for B0), "all", single
+                    lines such as "scl" or "gpio14", several with commas, or a list of them.  The line's solder
+                    jumper on the board has to be closed: an open one reads low.  A Pi line is 3.3 V logic with
+                    no threshold.  The trigger, the capture clock and the glitch filter work on it under the
+                    probe's name ("A1=f": SCL falls), and the capture's `names` say which channels they are
 
         Look at the capture's `problems` (or `ok`) before trusting it, and at `overflow`: an overflowed capture is
         shorter than asked for, but whole up to its last sample.  The board passes on 100 million words a second
@@ -507,6 +516,10 @@ class Board:
         clock_reg, clock = T.clock_register(clock)
         stages = T.stages_of(trigger, None if clock_reg else rate)
         filters = T.filter_samples(glitch)
+        lines = T.pi_lines(pi)
+        if lines and r["version"] < T.PI_DESIGN:
+            raise BoardError("The FPGA's design (version %d) does not take the Pi's lines.  "
+                             "\"logicboole load\" loads the design that comes with this software." % r["version"])
         if (stages or clock_reg or any(filters)) and not r["stages"]:
             raise BoardError("The FPGA's design (version %d) has no trigger, capture clock or glitch filter.  "
                              "\"logicboole load\" loads the design that comes with this software." % r["version"])
@@ -544,6 +557,8 @@ class Board:
                 self.write(0x38 + k, [mode])
                 self.write(0x40 + 16 * k, body)
             self.write(0x80, bytes(filters))
+        if r["version"] >= T.PI_DESIGN:     # version 5 on: the Pi's lines
+            self.write(0x2E, lines.to_bytes(2, "little"))
         r = self._need()
         took = (r["control"], r["divider"], r["limit"], r["burst"]) == (control, divider, samples, BUFFER_KB * 256)
         if r["stages"]:
@@ -551,6 +566,7 @@ class Board:
             for k, (mode, body) in enumerate(coded):
                 took = took and self.read(0x38 + k, 1) == bytes([mode]) and self.read(0x40 + 16 * k, 16) == body
             took = took and self.read(0x80, 16) == bytes(filters)
+        took = took and r["pi"] == lines
         if not took:
             raise BoardError("The FPGA's registers did not take the capture's settings.")
         self._send(0xC0, what="starting the FX3's parallel port")
@@ -693,7 +709,12 @@ class Board:
             info["clock"] = clock
         if any(filters):
             info["glitch_ns"] = [n * 5 for n in filters]
-        return Capture.from_words(data, fmt, rate, held,
-                                  thresholds=(round(volts(r["duty_a"]), 3), round(volts(r["duty_b"]), 3)),
-                                  overflow=bool(r["overflow"]), stopped=why if early else None, problems=problems,
-                                  info=info, trigger=at)
+        if lines:
+            info["pi"] = {CHANNELS[k]: "%s (%s)" % names for k, names in T.pi_names(lines).items()}
+        cap = Capture.from_words(data, fmt, rate, held,
+                                 thresholds=(round(volts(r["duty_a"]), 3), round(volts(r["duty_b"]), 3)),
+                                 overflow=bool(r["overflow"]), stopped=why if early else None, problems=problems,
+                                 info=info, trigger=at)
+        for k, names in T.pi_names(lines).items():
+            cap.names[k] = names[1]
+        return cap

@@ -1,7 +1,8 @@
 # Copyright (C) 2026 Michael Walker
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""The trigger, the capture clock and the glitch filter: the text that describes each, and the FPGA's registers.
+"""The trigger, the capture clock, the glitch filter and the Raspberry Pi's lines: the text that describes each,
+and the FPGA's registers.
 
 A trigger is one to four stages.  They are met one after the other, each by a later sample than the one before,
 and the sample that meets the last stage is the trigger sample.  As text, with "then" between the stages:
@@ -20,6 +21,17 @@ a number with no unit is a number of samples.  A capture clock is "A0=r", "B3=f"
 kept at each such edge of that input in place of every so many nanoseconds.  A glitch filter is a time: a
 change of an input counts once the input has held its new level for that long.
 
+The Raspberry Pi's lines.  Nine pins of the Pi's header reach the FPGA, each through a solder jumper that is open
+as the board is shipped.  A capture can take each of them in place of one probe, and the trigger, the capture
+clock and the glitch filter then work on it under the probe's name:
+
+    i2c     GPIO2 (SDA) for A0, GPIO3 (SCL) for A1
+    uart    GPIO14 (TXD) for A2, GPIO15 (RXD) for A3
+    spi     GPIO10 (MOSI) for A4, GPIO9 (MISO) for A5, GPIO11 (SCLK) for A6, GPIO8 (CE0) for A7, GPIO7 (CE1) for B0
+    all     all nine
+
+or single lines by either name: "sda", "gpio14", "i2c,uart".
+
 docs/protocol.md describes the registers.
 """
 import math
@@ -32,6 +44,11 @@ PERIOD = 5e-9                               # seconds: the glitch filter counts 
 FILTER_MAX = 250                            # samples: the longest glitch filter, 1.25 us
 UNITS = (("ns", 1e-9), ("us", 1e-6), ("ms", 1e-3), ("s", 1.0))
 EDGES = {"r": (1, 0), "f": (0, 1), "e": (1, 1)}
+# The Pi's lines in the order of the FPGA's register 2E: line k takes the place of channel k (A0 ... A7, B0)
+PI_LINES = (("GPIO2", "SDA"), ("GPIO3", "SCL"), ("GPIO14", "TXD"), ("GPIO15", "RXD"), ("GPIO10", "MOSI"),
+            ("GPIO9", "MISO"), ("GPIO11", "SCLK"), ("GPIO8", "CE0"), ("GPIO7", "CE1"))
+PI_GROUPS = {"I2C": (0, 1), "UART": (2, 3), "SPI": (4, 5, 6, 7, 8), "ALL": tuple(range(9))}
+PI_DESIGN = 5                               # the FPGA's design has them from this version on
 NO_LIMIT = 0xFFFFFFFF
 
 
@@ -247,6 +264,38 @@ def parse_filter(text):
             value = 0.0
         out[name] = value
     return out
+
+
+def pi_lines(pi):
+    """Which of the Pi's lines take the place of probes, as the FPGA's register 2E (bit k: line k of PI_LINES
+    in place of channel k), from what capture() is given: None, text such as "i2c,uart", "sda scl", "gpio14" or
+    "all", or a list of such names."""
+    if not pi:
+        return 0
+    if isinstance(pi, str):
+        pi = pi.replace(",", " ").split()
+    mask = 0
+    for name in pi:
+        key = str(name).strip().upper()
+        if key in ("OFF", "NONE", "0"):
+            continue
+        if key in PI_GROUPS:
+            which = PI_GROUPS[key]
+        else:
+            which = [k for k, names in enumerate(PI_LINES) if key in names]
+            if not which:
+                raise TriggerError("%s is not one of the Pi's lines: they are i2c (SDA, SCL), uart (TXD, RXD), "
+                                   "spi (MOSI, MISO, SCLK, CE0, CE1), all, or one of them by name, such as scl "
+                                   "or gpio3." % str(name).strip())
+        for k in which:
+            mask |= 1 << k
+    return mask
+
+
+def pi_names(mask):
+    """The Pi's lines of a register value as a dict: channel number -> (pin, signal), such as 0 -> ("GPIO2",
+    "SDA")."""
+    return {k: PI_LINES[k] for k in range(len(PI_LINES)) if mask >> k & 1}
 
 
 def ring_words(before, fmt, most):

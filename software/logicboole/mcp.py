@@ -124,6 +124,10 @@ TOOLS = [
                        "length is then `samples`, and times in the answers are sample numbers / rate"),
          text("glitch", "A glitch filter: \"50ns\" for every input, or \"A0=20ns,B=1us\" for a channel and a "
                         "pod (10 ns to 1.25 us).  A change counts once the input held its new level that long"),
+         text("pi", "Lines of the Raspberry Pi the board sits on, in place of probes, with no leads: \"i2c\" (SDA "
+                    "on A0, SCL on A1), \"uart\" (TXD on A2, RXD on A3), \"spi\" (MOSI A4, MISO A5, SCLK A6, CE0 "
+                    "A7, CE1 B0), \"all\", or single lines such as \"scl,gpio14\".  Each line's solder jumper on "
+                    "the board has to be closed: an open one reads low.  3.3 V logic, no threshold"),
          ("raw", {"type": "boolean", "description": "Have every sample sent, not only the changes: for signals "
                                                      "that change at nearly every sample"}),
          texts("save_as", "Full paths of more files to write the capture to, for other programs: .sr (PulseView, "
@@ -266,7 +270,7 @@ class Tools:
                 "threshold_a": round(a, 3), "threshold_b": round(b, 3)}
 
     def capture(self, asked, rate=1e6, seconds=None, samples=None, a=None, b=None, trigger=None, before=None,
-                samples_before=None, timeout=None, clock=None, glitch=None, raw=False, save_as=()):
+                samples_before=None, timeout=None, clock=None, glitch=None, pi=None, raw=False, save_as=()):
         if seconds is not None and samples is not None:
             raise ValueError("Give seconds or samples, not both.")
         if clock and samples is None:
@@ -302,7 +306,7 @@ class Tools:
             cap = board.capture(rate=rate, seconds=seconds or 1.0, samples=samples, fmt="raw" if raw else "rle",
                                 a=a, b=b, trigger=trigger, before=before, samples_before=samples_before,
                                 timeout=timeout, clock=clock,
-                                glitch=T.parse_filter(glitch) if glitch else None, progress=progress,
+                                glitch=T.parse_filter(glitch) if glitch else None, pi=pi, progress=progress,
                                 cancel=asked.cancelled)
         if asked.cancelled():               # nobody waits for this capture: no file is left behind
             raise ValueError("The request was cancelled.")
@@ -339,6 +343,8 @@ class Tools:
             out["clock"] = cap.info["clock"]
         if cap.info.get("glitch_ns"):
             out["glitch_ns"] = {c: ns for c, ns in zip(CHANNELS, cap.info["glitch_ns"]) if ns}
+        if cap.info.get("pi"):
+            out["pi"] = cap.info["pi"]
         out["usb"] = cap.info.get("usb")
         summary = cap.summary()
         out["changing"] = {c["channel"]: {"changes": c["changes"], "first": c["first"], "starts": c["starts"]}

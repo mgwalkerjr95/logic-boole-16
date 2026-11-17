@@ -96,6 +96,11 @@
         </label>
       </div>
       <div class="row">
+        <label class="f" title="Lines of the Raspberry Pi the board sits on, in place of probes, with no leads. Each line's solder jumper on the board has to be closed: an open one reads low. 3.3 V logic, no threshold.&#10;i2c   SDA on A0, SCL on A1&#10;uart   TXD on A2, RXD on A3&#10;spi   MOSI A4, MISO A5, SCLK A6, CE0 A7, CE1 B0&#10;all, or single lines: scl,gpio14">Pi lines
+          <input id="pi" class="text" type="text" spellcheck="false" autocomplete="off" placeholder="off">
+        </label>
+      </div>
+      <div class="row">
         <label class="f" title="A sample at each edge of one input, the circuit's own clock (up to 50 MHz), in place of one every so many nanoseconds: every sample is then one bit time of the bus.">Capture clock
           <select id="clockCh"></select>
           <select id="clockEdge" hidden><option value="r">rising</option><option value="f">falling</option><option value="e">both edges</option></select>

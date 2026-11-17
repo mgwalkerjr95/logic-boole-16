@@ -18,6 +18,16 @@
 //   run-length   bits 15:0 a sample, bits 31:16 how many more sample periods the inputs stayed like that
 //                (0 ... 65535): a word when the inputs change and one every 65536 samples while they do not
 // A sample is bits 7:0 pod A's inputs 7 ... 0 and bits 15:8 pod B's; 1 = above the pod's threshold.
+//
+// The Raspberry Pi's lines (registers 2E, 2F).  Nine pins of the Pi's header reach the FPGA through 1 k and a
+// solder jumper each, open as the board is shipped.  Each of them can take the place of one probe: its pad takes
+// it at both edges of the clock like a probe's, and from there on the design does not tell the two apart, so the
+// glitch filter, the capture clock and the trigger work on it.  A Pi line is 3.3 V logic and 1 = high: no
+// comparator, no threshold.  Which probe a line stands in for is fixed:
+//   bit 0  GPIO2  (I2C1 SDA)  for A0      bit 3  GPIO15 (UART RXD)  for A3      bit 6  GPIO11 (SPI0 SCLK) for A6
+//   bit 1  GPIO3  (I2C1 SCL)  for A1      bit 4  GPIO10 (SPI0 MOSI) for A4      bit 7  GPIO8  (SPI0 CE0)  for A7
+//   bit 2  GPIO14 (UART TXD)  for A2      bit 5  GPIO9  (SPI0 MISO) for A5      bit 8  GPIO7  (SPI0 CE1)  for B0
+// The nine pins are inputs with the FPGA's pull-down always: an open jumper reads 0.
 // The FX3 takes one word in a cycle, 100 million a second, and USB carries a little less.  At 200 MS/s the raw
 // format makes that many, and the run-length format up to twice that many when every sample differs, so the FIFO
 // takes two words in a cycle and such a capture lasts as long as the FIFO has room: 16,384 samples at the least.
@@ -73,7 +83,7 @@
 // Registers, on the FX3's I2C bus at address 0x2A (i2c_slave.v).  Numbers of more than one byte have their low
 // byte first.  What a read returns of the status and the counts is copied as the read is addressed, so one read
 // of several bytes fits together.
-//   00 ... 03  R   4C 42 16 and the design's version, 04
+//   00 ... 03  R   4C 42 16 and the design's version, 05
 //   04         RW  bit 0: the format, 0 raw, 1 run-length.  Bit 1: a test pattern in place of the probes, a
 //                  counter of the samples taken, of which bits 7:4 say how far it is shifted right (0: every
 //                  sample differs from the one before; 8: every 256th)
@@ -94,6 +104,8 @@
 //   2B         R   13: the FIFO holds 2^13 words
 //   2C         R   200: the samples a second with the divider at 0, in millions
 //   2D         R   4: how many trigger stages there are
+//   2E, 2F     RW  the Pi's lines in place of probes (9 bits, see above): bit 0 of 2E GPIO2 for A0 ... bit 0 of
+//                  2F GPIO7 for B0
 //   30         RW  bit 0: state capture.  Bit 1: at the capture clock's rising edges, bit 2: at its falling
 //                  edges.  Bits 7:4: which input is the capture clock (0 A0 ... 15 B7)
 //   31         RW  how many trigger stages are in use (0 ... 4); 0: no trigger, the capture begins at once
@@ -107,8 +119,8 @@
 //   50 ... 7F  RW  stages 1, 2 and 3 likewise
 //   80 ... 8F  RW  the glitch filter of A0 ... A7, B0 ... B7: N samples, 0 ... 250 (0: off)
 // The settings at 04, 08, 10, 20, 30, 31 and 32 are taken as RUN rises; the thresholds at once (the filter behind
-// the PWM needs 120 ms to settle); the stages and the glitch filters act as they are written, so they are written
-// while RUN is low.  Unused registers read 0.
+// the PWM needs 120 ms to settle); the stages, the glitch filters and the Pi's lines act as they are written, so
+// they are written while RUN is low.  Unused registers read 0.
 //
 // The other outputs: LED ARM blinks at 1 Hz, and while RUN is high it is on as long as the capture waits for its
 // trigger; LED TRIG is on from the trigger (or the first sample of a capture without one) to the last sample and
@@ -117,14 +129,14 @@
 //
 // JTAG instruction USER1 selects a 256-bit register, bit 0 first, for looking in when I2C does not answer; it is
 // read only.  The counts are copied in the 100 MHz clock when a read begins and shown at the next one: read twice.
-//   word 0   0x044C42B3: version 4 and a marker
+//   word 0   0x054C42B3: version 5 and a marker
 //   word 1   bit 0 the PLL has locked (as it is now), 1 RUN, 2 sampling, 3 done, 4 overflow, 7:5 the state,
 //            8 INIT_B, 9 SCL, 10 SDA, 11 FLAGA, 15:12 a count of the copies made, 31:16 the inputs
 //   word 2   words written, bits 31:0
 //   word 3   15:0 bits 47:32 of the same, 31:16 how often the I2C address has matched
 //   word 4   samples taken, bits 31:0
 //   word 5   7:0 bits 39:32 of the same, 15:8 register 04, 31:16 the FIFO's highest level
-//   word 6   11:0 pod A's duty cycle, 27:16 pod B's, 31 the parity of the lines this design does not use
+//   word 6   11:0 pod A's duty cycle, 27:16 pod B's, 31 the parity of the two lines this design does not use
 //   word 7   100 MHz clock cycles since configuration, divided by 256
 module capture2_top #(
     parameter HALF_SECOND = 50000000,   // cycles of the 100 MHz clock; the test bench shortens these
@@ -173,8 +185,8 @@ module capture2_top #(
     input  wire pif_gpio15
 );
     localparam N = 256;
-    localparam [31:0] MARKER = 32'h044C42B3;
-    localparam [7:0] VERSION = 8'd4;
+    localparam [31:0] MARKER = 32'h054C42B3;
+    localparam [7:0] VERSION = 8'd5;
     localparam [7:0] SAMPLE_MHZ = 8'd200;
     localparam STAGES = 4;
     localparam [FIFO_BITS:0] RING_MAX = (1 << FIFO_BITS) - 8;
@@ -231,6 +243,7 @@ module capture2_top #(
     reg [7:0] duty_a_low = 8'd0, duty_b_low = 8'd0;
     reg [39:0] r_limit = 40'd0;
     reg [15:0] r_burst = 16'd4096;
+    reg [8:0] r_pi = 9'd0;                      // 2E, 2F: the Pi's lines in place of probes
     reg [7:0] r_clock = 8'd0;                   // 30: state capture and its clock
     reg [2:0] r_nstage = 3'd0;                  // 31: trigger stages in use
     reg [15:0] r_ring = 16'd0;                  // 32: words kept while waiting
@@ -266,6 +279,8 @@ module capture2_top #(
             8'h14: r_limit[39:32] <= i2c_wr_data;
             8'h20: r_burst[7:0] <= i2c_wr_data;
             8'h21: r_burst[15:8] <= i2c_wr_data;
+            8'h2E: r_pi[7:0] <= i2c_wr_data;
+            8'h2F: r_pi[8] <= i2c_wr_data[0];
             8'h30: r_clock <= i2c_wr_data;
             8'h31: r_nstage <= i2c_wr_data[2:0];
             8'h32: r_ring[7:0] <= i2c_wr_data;
@@ -320,22 +335,34 @@ module capture2_top #(
                 .Q0(q_rise[g]), .Q1(q_fall[g]), .C0(clk), .C1(~clk), .CE(1'b1), .D(pad[g]), .R(1'b0), .S(1'b0));
         end
     endgenerate
+    // the Pi's lines, taken like the probes; which probe each stands in for is the order here: A0 ... A7, B0
+    wire [8:0] pi_pad = {pif_gpio7, pif_gpio8, pif_gpio11, pif_gpio9, pif_gpio10, pif_gpio15, pif_gpio14,
+                         pif_gpio3, pif_gpio2};
+    wire [8:0] pi_rise, pi_fall;
+    generate
+        for (g = 0; g < 9; g = g + 1) begin : pi_ddr
+            IDDR2 #(.DDR_ALIGNMENT("C0"), .INIT_Q0(1'b0), .INIT_Q1(1'b0), .SRTYPE("SYNC")) iddr (
+                .Q0(pi_rise[g]), .Q1(pi_fall[g]), .C0(clk), .C1(~clk), .CE(1'b1), .D(pi_pad[g]), .R(1'b0),
+                .S(1'b0));
+        end
+    endgenerate
+    wire [15:0] pi_on = {7'd0, r_pi};
     wire tin_rise, tin_fall;            // TRIG IN, taken like a probe
     IDDR2 #(.DDR_ALIGNMENT("C0"), .INIT_Q0(1'b0), .INIT_Q1(1'b0), .SRTYPE("SYNC")) iddr_trig (
         .Q0(tin_rise), .Q1(tin_fall), .C0(clk), .C1(~clk), .CE(1'b1), .D(trig_in), .R(1'b0), .S(1'b0));
     reg [16:0] in_e = 0, in_l = 0;      // the earlier half and the later one, 1 = above the threshold; 16: TRIG IN
     reg [1:0] locked_s = 0;
     reg [1:0] init_s = 0, others_s = 0;
-    // the lines this design does not use (the Pi's nine, CTL5, CTL8) stay inputs: JTAG shows their parity
-    wire others = ^{pif_gpio15, pif_gpio14, pif_gpio11, pif_gpio10, pif_gpio9, pif_gpio8, pif_gpio7, pif_gpio3,
-                    pif_gpio2, fx3_ctl8, fx3_ctl5};
+    // the two lines this design does not use (CTL5, CTL8) stay inputs: JTAG shows their parity
+    wire others = fx3_ctl8 ^ fx3_ctl5;
     always @(posedge clk) begin
         flaga_m <= fx3_ctl4;
         run_m <= fx3_ctl6;
         flaga <= flaga_m;
         run <= run_m;
-        in_e <= {tin_fall, ~q_fall};    // the comparators invert
-        in_l <= {tin_rise, ~q_rise};
+        // the comparators invert; a Pi line does not
+        in_e <= {tin_fall, (pi_on & {7'd0, pi_fall}) | (~pi_on & ~q_fall)};
+        in_l <= {tin_rise, (pi_on & {7'd0, pi_rise}) | (~pi_on & ~q_rise)};
         locked_s <= {locked_s[0], locked};
         init_s <= {init_s[0], init_b};
         others_s <= {others_s[0], others};
@@ -1110,6 +1137,8 @@ module capture2_top #(
         8'h2B: rd_mux = FIFO_BITS;
         8'h2C: rd_mux = SAMPLE_MHZ;
         8'h2D: rd_mux = STAGES;
+        8'h2E: rd_mux = r_pi[7:0];
+        8'h2F: rd_mux = {7'd0, r_pi[8]};
         8'h30: rd_mux = r_clock;
         8'h31: rd_mux = {5'd0, r_nstage};
         8'h32: rd_mux = r_ring[7:0];

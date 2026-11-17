@@ -1,0 +1,1454 @@
+<!DOCTYPE html>
+<!-- Copyright (C) 2026 Michael Walker -->
+<!-- SPDX-License-Identifier: CERN-OHL-S-2.0 -->
+<!-- The datasheet.  datasheet.pdf is this page printed on US Letter paper with headless Google Chrome, from this
+     folder, with the options headless=new, no-pdf-header-footer, generate-pdf-document-outline,
+     virtual-time-budget=10000 and print-to-pdf=datasheet.pdf, and "file://$PWD/datasheet.html" as the page.
+     The page numbers of the contents on page 1 are set by hand: check them against the PDF after a change.
+     The fonts are in datasheet/fonts, each under the SIL Open Font License (datasheet/fonts/README.md).
+     The pictures of the board are in hardware/images and datasheet/img. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Logic Boole 16 (board revision C) preliminary datasheet, rev B</title>
+<meta name="author" content="Michael Walker">
+<link rel="stylesheet" href="datasheet/fonts/fonts.css">
+<style>
+:root {
+  --ink: #0e1513; --text: #1c2220; --muted: #5b6661; --rule: #d2d8d4; --shade: #eef2f0;
+  --acc: #0a6ea8; --acc-bg: #e9f3f9; --gold: #b98a2e; --gold-bg: #fbf5e7; --dark: #090d0c; --trace: #4fc8ff;
+  --f-body: "Hanken Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --f-disp: "Big Shoulders Display", "Arial Narrow", sans-serif;
+  --f-mono: "IBM Plex Mono", Menlo, monospace;
+  --f-name: "Michroma", "Arial Black", sans-serif;
+}
+@page {
+  size: letter;
+  margin: 18mm 15mm 16mm 15mm;
+  @top-left { content: "LOGIC BOOLE 16  ·  preliminary datasheet"; font: 600 7.5pt "Hanken Grotesk", Arial, sans-serif; color: #5b6661; vertical-align: bottom; padding-bottom: 2.5mm; }
+  @top-right { content: "Rev B  ·  2026-11-17  ·  board revision C"; font: 400 7.5pt "Hanken Grotesk", Arial, sans-serif; color: #5b6661; vertical-align: bottom; padding-bottom: 2.5mm; }
+  @bottom-left { content: "© 2026 Michael Walker. Open hardware, CERN-OHL-S v2. Preliminary: subject to change."; font: 400 7pt "Hanken Grotesk", Arial, sans-serif; color: #5b6661; vertical-align: top; padding-top: 3mm; }
+  @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 600 7pt "Hanken Grotesk", Arial, sans-serif; color: #5b6661; vertical-align: top; padding-top: 3mm; }
+}
+@page :first {
+  margin-top: 12mm;
+  @top-left { content: none; } @top-right { content: none; }
+}
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { margin: 0; font: 400 8.6pt/1.42 var(--f-body); color: var(--text); font-variant-numeric: tabular-nums; }
+p { margin: 0 0 2mm; }
+b, strong { font-weight: 700; color: var(--ink); }
+code, .mono { font-family: var(--f-mono); font-size: .92em; font-weight: 500; }
+ul, ol { margin: 0 0 2mm; padding-left: 4.5mm; }
+li { margin: 0 0 .8mm; }
+li::marker { color: var(--acc); }
+
+/* section headings */
+h2 { font: 800 17pt/1 var(--f-disp); text-transform: uppercase; letter-spacing: .015em; color: var(--ink);
+     margin: 6mm 0 3mm; padding-top: 2.2mm; border-top: 1.6pt solid var(--ink); break-after: avoid; }
+h2 .n { color: var(--acc); margin-right: 2.5mm; }
+h3 { font: 700 10pt/1.2 var(--f-body); color: var(--ink); margin: 4.5mm 0 1.6mm; break-after: avoid; }
+h2.plain { font: 700 10pt/1.2 var(--f-body); text-transform: none; letter-spacing: 0; margin: 0 0 1.6mm; padding: 0; border: 0; }
+.newpage { break-before: page; }
+.newpage > h2:first-child { margin-top: 0; }
+.keep { break-inside: avoid; }
+
+/* tables */
+table { width: 100%; border-collapse: collapse; margin: 0 0 2.5mm; font-size: 7.9pt; line-height: 1.35; break-inside: auto; }
+thead { display: table-header-group; }
+tr { break-inside: avoid; }
+th { background: var(--shade); color: var(--ink); text-align: left; font-weight: 700; padding: 1.1mm 1.6mm; border-top: .8pt solid var(--ink); border-bottom: .6pt solid #9aa39e; vertical-align: bottom; }
+td { padding: .85mm 1.6mm; border-bottom: .4pt solid var(--rule); vertical-align: top; }
+td.c, th.c { text-align: center; }
+td.v, th.v { text-align: center; white-space: nowrap; }
+td.p { font-weight: 600; color: var(--ink); }
+th.w-par { width: 27%; } th.w-n { width: 8%; } th.w-u { width: 8%; }
+table.kv td:first-child { width: 24%; font-weight: 600; color: var(--ink); }
+table.pin td:first-child, table.pin th:first-child { width: 9%; text-align: center; }
+table.pin td:nth-child(2) { text-align: center; }
+.sig { font-family: var(--f-mono); font-weight: 500; font-size: .95em; color: var(--ink); white-space: nowrap; }
+
+/* callouts */
+.warn, .note, .tip { border-left: 2.6pt solid var(--acc); background: var(--acc-bg); padding: 2mm 3mm 1.2mm; margin: 0 0 3mm; break-inside: avoid; }
+.warn { border-color: #c8102e; background: #fcf0f1; }
+.warn .h svg { margin-right: 1.4mm; vertical-align: -.4pt; }
+.warn ul { margin-bottom: 1mm; } .warn li::marker { color: #c8102e; }
+.note { border-color: var(--gold); background: var(--gold-bg); }
+.tip { border-color: #8b968f; background: var(--shade); }
+.warn .h, .note .h, .tip .h { font-weight: 700; color: var(--ink); margin-bottom: .8mm; }
+
+/* figures */
+figure { margin: 1mm 0 3.5mm; break-inside: avoid; }
+figure img { display: block; width: 100%; }
+figure svg { display: block; width: 100%; height: auto; }
+figcaption { font-size: 7.4pt; color: var(--muted); margin-top: 1.2mm; }
+figcaption b { color: var(--ink); }
+
+/* cover */
+.cover { background: var(--dark); color: #e8ece8; border-radius: 2.5mm; padding: 7mm 8mm 6.5mm; display: grid; grid-template-columns: 1fr auto; gap: 6mm; align-items: end; }
+.cover .kicker { font: 600 7.6pt var(--f-body); letter-spacing: .14em; text-transform: uppercase; color: #d8b062; margin-bottom: 4mm; }
+.lockup { display: flex; align-items: center; gap: .34em; font: 400 25pt/1 var(--f-name); color: #f2f6f3; white-space: nowrap; margin: 0 0 4.5mm; }
+.lockup svg { height: .74em; width: auto; flex: none; }
+.lockup .n16 { background: #f2f6f3; color: var(--dark); border-radius: .14em; padding: .17em .2em .17em .24em; margin-left: .06em; }
+.cover .sub { font: 400 10pt/1.38 var(--f-body); color: #c6cfc9; max-width: 128mm; margin: 0; }
+.cover .rev { text-align: right; font: 400 7.6pt/1.6 var(--f-body); color: #94a29b; white-space: nowrap; }
+.cover .rev b { color: #f2f6f3; font-weight: 600; }
+.cover .flag { display: inline-block; font: 600 7pt/1 var(--f-mono); letter-spacing: .1em; color: var(--dark); background: var(--trace); border-radius: 1mm; padding: 1.1mm 1.8mm; margin-bottom: 2.5mm; }
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; margin: 3.2mm 0 3.6mm; border-top: .6pt solid var(--rule); border-bottom: .6pt solid var(--rule); }
+.stat { padding: 2.4mm 3mm 2.2mm; border-left: .6pt solid var(--rule); }
+.stat:first-child { border-left: 0; padding-left: 0; }
+.stat .num { font: 800 19pt/1 var(--f-disp); color: var(--ink); white-space: nowrap; }
+.stat .num small { font-size: 11pt; margin-left: .6mm; }
+.stat .lab { font-size: 7.4pt; color: var(--muted); margin-top: .8mm; line-height: 1.3; }
+.two { display: grid; grid-template-columns: 1.08fr 1fr; gap: 7mm; }
+.two h3:first-child { margin-top: 0; }
+.even { grid-template-columns: 1fr 1fr; }
+.three { display: grid; grid-template-columns: 1fr 1fr 1.2fr; column-gap: 5mm; align-items: start; }
+figure.jp { margin: 0 0 3mm; grid-column: 3; grid-row: 1 / span 2; }
+.jp-tip { grid-column: 1 / span 2; grid-row: 2; }
+.jp-n { font-family: var(--f-body); font-weight: 700; font-size: 44px; fill: var(--ink); }
+.jp-s { font-family: var(--f-mono); font-weight: 500; font-size: 34px; fill: var(--muted); }
+.hero { border: .6pt solid var(--rule); border-radius: 2mm; padding: 1mm 3mm; margin-bottom: 3mm; }
+.hero img { width: 100%; max-height: 37mm; object-fit: contain; display: block; }
+.features li { margin-bottom: .75mm; }
+.apps { columns: 2; column-gap: 6mm; font-size: 7.8pt; margin: 0 0 1mm; padding-left: 4mm; }
+.apps li { margin: 0 0 .5mm; }
+.contents { columns: 2; column-gap: 6mm; font-size: 7.8pt; list-style: none; padding: 0; margin: 0; }
+.contents li { margin: 0 0 .6mm; }
+.contents li a { display: flex; color: inherit; text-decoration: none; }
+.contents .n { display: inline-block; width: 5mm; color: var(--acc); font-weight: 700; }
+.contents .pg { margin-left: auto; color: var(--muted); }
+
+/* labelled board views */
+.dg-l { fill: none; stroke: var(--acc); stroke-width: 1.8; }
+.dg-p { fill: var(--acc); stroke: #fff; stroke-width: 2; }
+.dg-t { font-family: var(--f-body); font-weight: 700; font-size: 27px; fill: var(--ink); }
+.dg-s { font-family: var(--f-body); font-size: 20.5px; fill: var(--muted); }
+figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
+
+/* block diagram, input circuit, pinout */
+.bd rect.b { fill: #fff; stroke: var(--ink); stroke-width: 1.4; }
+.bd rect.s { fill: var(--shade); stroke: var(--ink); stroke-width: 1.4; }
+.bd rect.a { fill: var(--acc-bg); stroke: var(--acc); stroke-width: 1.6; }
+.bd .w { fill: none; stroke: var(--ink); stroke-width: 1.4; }
+.bd .wa { fill: none; stroke: var(--acc); stroke-width: 1.6; }
+.bd text { font-family: var(--f-body); font-size: 15px; fill: var(--ink); }
+.bd text.t { font-weight: 700; }
+.bd text.m { fill: var(--muted); font-size: 13.5px; }
+.bd text.k { font-family: var(--f-mono); font-size: 13px; font-weight: 500; }
+.bd text.ch { font-family: var(--f-mono); font-size: 14px; font-weight: 600; fill: var(--acc); }
+.bd .ah { fill: var(--ink); } .bd .aha { fill: var(--acc); }
+.bd .dot { fill: var(--ink); }
+.bd rect.pin { fill: #fff; stroke: var(--ink); stroke-width: 1.3; }
+.bd rect.pin.sg { fill: var(--acc-bg); stroke: var(--acc); }
+.bd rect.shr { fill: var(--shade); stroke: var(--ink); stroke-width: 1.6; }
+
+/* dimension drawing */
+.dm .dm-o { fill: #f6f8f6; stroke: var(--ink); stroke-width: 2; }
+.dm .dm-o2 { fill: #dfe6e1; stroke: var(--ink); stroke-width: 1.4; }
+.dm .dm-c { fill: #e3e9e5; stroke: #56615c; stroke-width: 1; }
+.dm .dm-c2 { fill: #cfd8d2; stroke: #56615c; stroke-width: 1; }
+.dm .dm-pi { fill: none; stroke: #7d8a84; stroke-width: 1.2; stroke-dasharray: 7 5; }
+.dm .dm-pi2 { fill: #fff; stroke: #7d8a84; stroke-width: 1.2; stroke-dasharray: 7 5; }
+.dm .dm-hole { fill: #fff; stroke: var(--ink); stroke-width: 1.4; }
+.dm .dm-x { fill: none; stroke: var(--acc); stroke-width: .9; stroke-dasharray: 9 3 2 3; }
+.dm .dm-p1 { fill: var(--acc); }
+.dm .dm-pin { stroke: #56615c; stroke-width: 3; }
+.dm .dm-d { stroke: var(--acc); stroke-width: 1.1; }
+.dm .dm-e { fill: none; stroke: var(--acc); stroke-width: .7; }
+.dm .dm-ah { fill: var(--acc); }
+.dm text { font-family: var(--f-body); }
+.dm .dm-t { font-size: 15px; font-weight: 700; fill: var(--ink); }
+.dm .dm-l { font-size: 13px; fill: var(--muted); }
+.dm .dm-n { font-size: 13.5px; font-weight: 700; fill: var(--ink); }
+.dm .dm-h { font-size: 15.5px; font-weight: 700; fill: var(--ink); }
+
+.small { font-size: 7.6pt; color: var(--muted); }
+.ref { font-weight: 400; color: var(--muted); }
+.end a { color: var(--acc); text-decoration: none; }
+.bd .hk { fill: var(--acc); }
+.end { margin-top: 4mm; padding-top: 2mm; border-top: .6pt solid var(--rule); font-size: 7.6pt; color: var(--muted); break-inside: avoid; }
+
+/* On screen, when this source file is opened in a browser: a sheet with the PDF's margins, not edge to edge.
+   The PDF is the datasheet; none of this prints. */
+.srcbar { display: none; }
+@media screen {
+  html { background: #d9dedb; }
+  body { width: 216mm; max-width: 100%; margin: 8mm auto; padding: 14mm 15mm 16mm; background: #fff; box-shadow: 0 .6mm 5mm rgba(0, 0, 0, .22); }
+  .newpage { margin-top: 14mm; }
+  .srcbar { display: block; margin: -6mm 0 6mm; padding: 2.2mm 3mm; background: var(--gold-bg); border-left: 2.6pt solid var(--gold); font-size: 8pt; }
+  .srcbar a { color: var(--acc); font-weight: 600; }
+}
+</style>
+</head>
+<body>
+
+<!-- ============================== PAGE 1 ============================== -->
+<div class="srcbar">This page is the print source of the datasheet. The datasheet itself is the PDF: <a href="datasheet.pdf">datasheet.pdf</a></div>
+<header class="cover">
+  <div>
+    <div class="kicker">Preliminary datasheet · open-source 16-channel logic analyzer</div>
+    <div class="lockup" role="img" aria-label="Logic Boole 16">
+      <svg viewBox="0 0 132.5 100" aria-hidden="true"><polyline points="6.25,93.75 24.25,93.75 24.25,6.25 64.25,6.25 64.25,93.75 86.25,93.75 86.25,6.25 108.25,6.25 108.25,93.75 126.25,93.75" fill="none" stroke="currentColor" stroke-width="12.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span aria-hidden="true">LOGIC BOOLE</span><span class="n16" aria-hidden="true">16</span>
+    </div>
+    <p class="sub">Sixteen channels at 200&nbsp;MS/s over USB&nbsp;3, through 1&nbsp;MΩ inputs for 1.2 to 5&nbsp;V logic. It runs from one USB-C cable on a computer, or mounted on a Raspberry Pi 4 or 5 as a HAT+. Open source: the board, the FPGA design, the firmware and the software.</p>
+  </div>
+  <div class="rev"><span class="flag">PRELIMINARY</span><br>Datasheet <b>rev B</b><br>2026-11-17<br>Board <b>revision C</b></div>
+</header>
+
+<div class="stats">
+  <div class="stat"><div class="num">16<small>channels</small></div><div class="lab">Two pods of 8, each with its own threshold</div></div>
+  <div class="stat"><div class="num">200<small>MS/s</small></div><div class="lab">On all 16 channels: one sample every 5 ns</div></div>
+  <div class="stat"><div class="num">85<small>MHz</small></div><div class="lab">Clocks captured whole, on each of the 16 inputs</div></div>
+  <div class="stat"><div class="num">Open<small>source</small></div><div class="lab">Board, FPGA design, firmware and software</div></div>
+</div>
+
+<div class="two">
+  <div>
+    <h2 class="plain" id="s1">Overview</h2>
+    <p>Logic Boole 16 is a 16-channel digital logic analyzer on one 82 × 86 mm board. Signals come in on two keyed pods, pass through sixteen identical protected inputs to an FPGA that samples and triggers on them, and leave over USB&nbsp;3 to the host: a computer, or the Raspberry Pi the board is mounted on. The host runs the software and holds the capture. The whole design is published under open licenses (section 12).</p>
+    <h3>Features</h3>
+    <ul class="features">
+      <li><b>16 channels at 200 MS/s</b>, in two pods of 8: a sample every 5&nbsp;ns.</li>
+      <li><b>Streams to the host over USB 3</b>: all 16 channels at 100&nbsp;MS/s for any signal, and at 200&nbsp;MS/s for signals that change in up to 96 million samples a second.</li>
+      <li><b>Triggers in the FPGA</b>, on every sample: levels, edges, pulses by their length and up to four stages in turn, with trigger in and out for other instruments.</li>
+      <li><b>A glitch filter for each channel</b>, up to 1.25&nbsp;µs, and capture on the circuit's own clock up to 50&nbsp;MHz.</li>
+      <li><b>1.2 to 5 V logic.</b> One threshold for each pod, set from 0.3 to 3&nbsp;V.</li>
+      <li><b>1 MΩ inputs</b> with 10&nbsp;pF at the probe pin, a comparator with hysteresis on every channel, and protection designed for ±25&nbsp;V.</li>
+      <li><b>One USB-C cable</b> for power and data: about 1&nbsp;W, USB&nbsp;3 in either plug orientation, USB&nbsp;2.0 as a fallback.</li>
+      <li><b>Raspberry Pi HAT+</b> for the Pi 4 and Pi 5: stackable, 16&nbsp;mm above the Pi, room for the Pi 5 Active Cooler.</li>
+      <li><b>Nothing to brick</b>: the host loads the board each time it connects.</li>
+      <li><b>Open source</b>: the KiCad project, the FPGA design, the firmware and the host software, with an app, a command line, sigrok's decoders and a server for AI agents.</li>
+    </ul>
+  </div>
+  <div>
+    <div class="hero"><img src="datasheet/img/hero.jpg" alt="The Logic Boole 16 board: two pod connectors on the near edge, the FPGA in the middle, USB-C on the right edge and the 40-pin header at the back."></div>
+    <table class="kv">
+      <tbody>
+        <tr><td>Main parts</td><td>Spartan-6 XC6SLX9 FPGA, EZ-USB FX3 USB controller, 16 fast comparators</td></tr>
+        <tr><td>Power</td><td>5 V from USB-C or the Pi's header, about 1 W</td></tr>
+        <tr><td>Host link</td><td>USB-C: USB 3 at 5 Gbit/s, or USB 2.0</td></tr>
+        <tr><td>Probing</td><td>2 × keyed 16-pin pods, 3-pin trigger header</td></tr>
+        <tr><td>Size</td><td>82.0 × 86.0 mm (3.23 × 3.39 in)</td></tr>
+        <tr><td>Design files</td><td>Open source, on GitHub (section 12)</td></tr>
+        <tr><td>In the box</td><td>1 × board, assembled; 4 × M2.5 × 16 mm spacers and 8 × M2.5 screws for a Pi. No leads or cables yet</td></tr>
+      </tbody>
+    </table>
+    <h3>Typical applications <span class="ref">(section 8)</span></h3>
+    <ul class="apps">
+      <li>I²C, SPI and UART buses</li><li>Parallel buses with their clock</li><li>Two logic levels in one capture</li><li>Timing between signals</li><li>Rare faults in long captures</li>
+      <li>Glitches and runt pulses</li><li>Triggering a scope</li><li>Started by another instrument</li><li>Scripts and AI agents</li><li>Unattended capture on a Pi</li>
+    </ul>
+    <!-- Page numbers are set by hand. -->
+    <h3>Contents</h3>
+    <ol class="contents">
+      <li><a href="#s1"><span class="n">1</span>Overview<span class="pg">1</span></a></li>
+      <li><a href="#s2"><span class="n">2</span>Specifications<span class="pg">2</span></a></li>
+      <li><a href="#s3"><span class="n">3</span>Absolute maximum ratings<span class="pg">4</span></a></li>
+      <li><a href="#s4"><span class="n">4</span>Board layout<span class="pg">5</span></a></li>
+      <li><a href="#s5"><span class="n">5</span>Connections<span class="pg">6</span></a></li>
+      <li><a href="#s6"><span class="n">6</span>Capture and triggers<span class="pg">8</span></a></li>
+      <li><a href="#s7"><span class="n">7</span>Getting started<span class="pg">9</span></a></li>
+      <li><a href="#s8"><span class="n">8</span>Typical applications<span class="pg">11</span></a></li>
+      <li><a href="#s9"><span class="n">9</span>Probing and safety<span class="pg">12</span></a></li>
+      <li><a href="#s10"><span class="n">10</span>Dimensions<span class="pg">13</span></a></li>
+      <li><a href="#s11"><span class="n">11</span>Firmware and software<span class="pg">14</span></a></li>
+      <li><a href="#s12"><span class="n">12</span>Open source<span class="pg">15</span></a></li>
+      <li><a href="#s13"><span class="n">13</span>Status and known limits<span class="pg">16</span></a></li>
+      <li><a href="#s14"><span class="n">14</span>Revisions and documents<span class="pg">17</span></a></li>
+    </ol>
+  </div>
+</div>
+
+<!-- ============================== 2 SPECIFICATIONS ============================== -->
+<section class="newpage">
+<h2 id="s2"><span class="n">2</span> Specifications</h2>
+<p>For the revision C board. Input figures are at the probe pin of the pod connector. A figure whose note says <i>by design</i> is what the circuit is designed and simulated to do, and has not been measured on a board yet. Every other figure was measured on the first boards, at room temperature and with 3.3&nbsp;V signals: section 13 says on which boards.</p>
+
+<h3>Capture</h3>
+<table>
+  <thead><tr><th class="w-par">Parameter</th><th class="v w-n">Min</th><th class="v w-n">Typ</th><th class="v w-n">Max</th><th class="v w-u">Unit</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td class="p">Channels</td><td class="v"></td><td class="v">16</td><td class="v"></td><td class="v"></td><td>Digital. Two pods of 8: A0–A7 and B0–B7</td></tr>
+    <tr><td class="p">Sample rate</td><td class="v"></td><td class="v"></td><td class="v">200</td><td class="v">MS/s</td><td>On all 16 channels: 5 ns between samples, 4.95 to 5.05 ns measured. Lower rates are 200 MS/s divided by a whole number</td></tr>
+    <tr><td class="p">Streaming over USB 3, any signal</td><td class="v"></td><td class="v"></td><td class="v">100</td><td class="v">MS/s</td><td>All 16 channels in the raw format: two samples in each 32-bit word, 200 MB/s</td></tr>
+    <tr><td class="p">Streaming over USB 3, run-length</td><td class="v"></td><td class="v"></td><td class="v">200</td><td class="v">MS/s</td><td>All 16 channels, for signals that change in up to 96 million samples a second: one word for each sample that differs from the one before. A 48 MHz clock streamed whole for 1 s</td></tr>
+    <tr><td class="p">Any signal at 200 MS/s</td><td class="v"></td><td class="v">0.89&nbsp;M</td><td class="v"></td><td class="v">samples</td><td>A signal that changes in 100 million samples a second or more fills the board's buffers. The capture ends there, after 4.5 ms, whole to its last sample</td></tr>
+    <tr><td class="p">Streaming over USB 2.0</td><td class="v"></td><td class="v"></td><td class="v">22</td><td class="v">MS/s</td><td>All 16 channels in the raw format, any signal: 44 MB/s. Run-length at 200 MS/s for signals that change in up to 11 million samples a second</td></tr>
+    <tr><td class="p">Kept from before the trigger</td><td class="v"></td><td class="v"></td><td class="v">8184</td><td class="v">words</td><td>16,368 samples in the raw format. In the run-length format 8184 changes, however long they took</td></tr>
+    <tr><td class="p">Capture length</td><td class="v"></td><td class="v"></td><td class="v"></td><td class="v"></td><td>Limited by the host's memory. The longest so far is 600 million samples</td></tr>
+    <tr><td class="p">Input signal frequency</td><td class="v"></td><td class="v">85</td><td class="v"></td><td class="v">MHz</td><td>Every period of a clock was seen at 50, 70, 80 and 85 MHz on each of the 16 inputs of one board, and on the five inputs tried of a second</td></tr>
+    <tr><td class="p">Input pulse length</td><td class="v">6</td><td class="v"></td><td class="v"></td><td class="v">ns</td><td>A half period at 85 MHz is 5.9 ns. A pulse shorter than the 5 ns between samples can be missed</td></tr>
+    <tr><td class="p">Pulse length error</td><td class="v"></td><td class="v">±0.6</td><td class="v"></td><td class="v">ns</td><td>At 85 MHz pod A reads a clock high for 51 to 53 % of the time and pod B for 45 to 48 %: the first boards have a different comparator on each pod (section 14)</td></tr>
+    <tr><td class="p">Capture clock</td><td class="v"></td><td class="v"></td><td class="v">50</td><td class="v">MHz</td><td>The circuit's own clock on any input: a sample at its rising edges, its falling edges or both. The data must be steady 15 ns before the edge</td></tr>
+    <tr><td class="p">Trigger output delay</td><td class="v"></td><td class="v">75–80</td><td class="v"></td><td class="v">ns</td><td>From the trigger sample at the inputs to TRIG OUT. A glitch filter adds its own time and 20 ns</td></tr>
+    <tr><td class="p">Trigger input delay</td><td class="v"></td><td class="v"></td><td class="v">5</td><td class="v">ns</td><td>The trigger sample is the sample in which an input shows the same edge, or the one after it. Tried from 100 kHz to 50 MHz</td></tr>
+    <tr><td class="p">Glitch filter</td><td class="v">off</td><td class="v"></td><td class="v">1.25</td><td class="v">µs</td><td>For each channel, in 5 ns steps. A 25 MHz clock passes at 15 ns and is removed at 25 ns</td></tr>
+    <tr><td class="p">Timebase accuracy</td><td class="v"></td><td class="v"></td><td class="v">±50</td><td class="v">ppm</td><td><i>By design.</i> The 24 MHz oscillator over temperature and five years</td></tr>
+  </tbody>
+</table>
+
+<h3>Inputs</h3>
+<table>
+  <thead><tr><th class="w-par">Parameter</th><th class="v w-n">Min</th><th class="v w-n">Typ</th><th class="v w-n">Max</th><th class="v w-u">Unit</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td class="p">Logic level</td><td class="v">1.2</td><td class="v"></td><td class="v">5</td><td class="v">V</td><td><i>By design.</i> Captured so far: 3.3 V logic on every input, and 5 V logic on four inputs of pod A</td></tr>
+    <tr><td class="p">Threshold range</td><td class="v">0.3</td><td class="v"></td><td class="v">3.0</td><td class="v">V</td><td>Set separately for pod A and pod B. All 16 inputs read a 3.3 V pattern right at every setting from 0.2 to 3.0 V</td></tr>
+    <tr><td class="p">Threshold step</td><td class="v"></td><td class="v">0.75</td><td class="v"></td><td class="v">mV</td><td>A 12-bit setting</td></tr>
+    <tr><td class="p">Threshold voltage</td><td class="v"></td><td class="v">±10</td><td class="v"></td><td class="v">mV</td><td>The voltage the board makes against the setting, as seen from the probe: read at 0.30, 1.56 and 3.00 V on both pods of one board</td></tr>
+    <tr><td class="p">Threshold accuracy</td><td class="v"></td><td class="v"></td><td class="v">±100</td><td class="v">mV</td><td><i>By design.</i> With the input divider's and the comparator's errors: at any setting, without calibration, on 99.7 % of channels</td></tr>
+    <tr><td class="p">Hysteresis</td><td class="v">25</td><td class="v">60–80</td><td class="v">100</td><td class="v">mV</td><td><i>By design.</i> At every threshold setting</td></tr>
+    <tr><td class="p">Input resistance</td><td class="v">1.0</td><td class="v">1.08</td><td class="v"></td><td class="v">MΩ</td><td><i>By design.</i> To ground: the divider's two resistors</td></tr>
+    <tr><td class="p">Input capacitance</td><td class="v"></td><td class="v">8.6</td><td class="v">10</td><td class="v">pF</td><td><i>By design.</i> To ground</td></tr>
+    <tr><td class="p">Channel-to-channel skew</td><td class="v"></td><td class="v">1.4</td><td class="v">5</td><td class="v">ns</td><td>Between the earliest and the latest of the 16 inputs of one board. Pod B is 0.2 to 0.6 ns ahead of pod A. The 5 ns, one sample, is by design</td></tr>
+    <tr><td class="p">Input voltage, continuous</td><td class="v">−25</td><td class="v"></td><td class="v">+25</td><td class="v">V</td><td><i>By design.</i> On any channel, with the board powered or not. Not tested on a board yet</td></tr>
+  </tbody>
+</table>
+
+<h3>Pi bus lines</h3>
+<p>Nine of the Raspberry Pi's header pins, through the bus jumpers of section 5. This capture has passed simulation and has not yet run on a board: every figure here is by design.</p>
+<table>
+  <thead><tr><th class="w-par">Parameter</th><th class="v w-n">Min</th><th class="v w-n">Typ</th><th class="v w-n">Max</th><th class="v w-u">Unit</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td class="p">Lines</td><td class="v"></td><td class="v">9</td><td class="v"></td><td class="v"></td><td>I²C1, the UART and SPI0. Each takes the place of one channel, A0 to A7 and B0, so a capture still has 16</td></tr>
+    <tr><td class="p">Sample rate</td><td class="v"></td><td class="v"></td><td class="v">200</td><td class="v">MS/s</td><td>The capture's rate. A line is sampled, filtered and triggered on like the channel it replaces</td></tr>
+    <tr><td class="p">Logic level</td><td class="v"></td><td class="v">3.3</td><td class="v"></td><td class="v">V</td><td>No threshold setting: low below 0.8 V, high above 2.0 V</td></tr>
+    <tr><td class="p">Input resistance</td><td class="v">7</td><td class="v"></td><td class="v">17.5</td><td class="v">kΩ</td><td>To ground: 1 kΩ in series and the FPGA pin's pull-down, which draws 0.2 to 0.55 mA from a line at 3.3 V</td></tr>
+    <tr><td class="p">Input capacitance</td><td class="v"></td><td class="v"></td><td class="v">10</td><td class="v">pF</td><td>The FPGA pin, behind the 1 kΩ. The board's track adds to it</td></tr>
+    <tr><td class="p">I²C high level, jumper closed</td><td class="v">2.6</td><td class="v"></td><td class="v">3.0</td><td class="v">V</td><td>At the Pi's pin: the Pi's 1.8 kΩ pull-up against the FPGA's pull-down. 3.3 V with the jumper open</td></tr>
+    <tr><td class="p">Input voltage</td><td class="v">0</td><td class="v"></td><td class="v">3.6</td><td class="v">V</td><td>3.3 V logic only. Not 5 V tolerant, and no protection beyond the 1 kΩ</td></tr>
+  </tbody>
+</table>
+
+<h3>Trigger header</h3>
+<table>
+  <thead><tr><th class="w-par">Parameter</th><th class="v w-n">Min</th><th class="v w-n">Typ</th><th class="v w-n">Max</th><th class="v w-u">Unit</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td class="p">Trigger output level</td><td class="v"></td><td class="v">3.3</td><td class="v"></td><td class="v">V</td><td>CMOS output through 33 Ω. High from the trigger to the capture's last sample</td></tr>
+    <tr><td class="p">Trigger input level</td><td class="v"></td><td class="v">3.3</td><td class="v">5</td><td class="v">V</td><td>Schmitt-trigger input for 3.3 V logic, 100 kΩ to ground. Tried with 3.3 V; it tolerates 5 V logic by design</td></tr>
+  </tbody>
+</table>
+
+<div class="keep">
+<h3>USB link and power</h3>
+<table>
+  <thead><tr><th class="w-par">Parameter</th><th class="v w-n">Min</th><th class="v w-n">Typ</th><th class="v w-n">Max</th><th class="v w-u">Unit</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td class="p">USB 3 link rate</td><td class="v"></td><td class="v">5</td><td class="v"></td><td class="v">Gbit/s</td><td>USB-C, in either plug orientation</td></tr>
+    <tr><td class="p">Data to the host, USB 3</td><td class="v"></td><td class="v">384</td><td class="v"></td><td class="v">MB/s</td><td>96 million words a second in a capture. 391 MB/s for 10 minutes on a Raspberry Pi 5 with an earlier test design, every word checked</td></tr>
+    <tr><td class="p">USB 2.0 link rate</td><td class="v"></td><td class="v">480</td><td class="v"></td><td class="v">Mbit/s</td><td>The fallback on a USB 2.0 cable, port or host: 44 MB/s to the host</td></tr>
+    <tr><td class="p">Supply voltage</td><td class="v"></td><td class="v">5.0</td><td class="v">5.5</td><td class="v">V</td><td>From USB-C, from the Pi's 5 V pins, or from both</td></tr>
+    <tr><td class="p">Supply current</td><td class="v"></td><td class="v">0.18</td><td class="v">0.5</td><td class="v">A</td><td>One board: 0.05 A before the host has loaded it, 0.14 A loaded and idle, 0.18 A streaming at 393 MB/s with an earlier test design. Any USB port can supply it. No USB Power Delivery</td></tr>
+    <tr><td class="p">Power</td><td class="v"></td><td class="v">0.95</td><td class="v">2.5</td><td class="v">W</td><td>The 2.5 W is by design</td></tr>
+  </tbody>
+</table>
+</div>
+<div class="tip">
+  <div class="h">Which cable and port?</div>
+  <p>Use a cable rated for USB&nbsp;3 (5&nbsp;Gbit/s) with a USB-C plug for the board, into a USB&nbsp;3 port. On a charge-only or USB&nbsp;2.0 cable, or on a USB&nbsp;2.0 port, the board still works, at USB&nbsp;2.0 rates. Any USB port can power it.</p>
+</div>
+
+<h3>Board</h3>
+<table class="kv">
+  <tbody>
+    <tr><td>Size</td><td>82.0 × 86.0 mm (3.23 × 3.39 in), 1.6 mm thick. Section 10 has the drawing</td></tr>
+    <tr><td>Mounting holes</td><td>4 × Ø2.7 mm for M2.5 screws, on the Raspberry Pi's 58 × 49 mm pattern. Joined to ground</td></tr>
+    <tr><td>PCB</td><td>4 layers, gold (ENIG) finish, green solder mask</td></tr>
+    <tr><td>Tallest parts</td><td>The pod connectors, about 11 mm above the board. The 40-pin header's pins stand 8.2 mm above it</td></tr>
+    <tr><td>Back</td><td>Only the stacking header's body, 13.5 mm. Nothing else is fitted underneath</td></tr>
+    <tr><td>Raspberry Pi</td><td>HAT+ with ID EEPROM, stackable class, for the Pi 4 and Pi 5. 16 mm between the Pi and the board</td></tr>
+    <tr><td>Use</td><td>Indoors, at 0 to 40 °C</td></tr>
+  </tbody>
+</table>
+</section>
+
+<!-- ============================== 3 ABSOLUTE MAXIMUM ============================== -->
+<section>
+<h2 id="s3"><span class="n">3</span> Absolute maximum ratings</h2>
+<p>Beyond these limits the board may be damaged. Inside them, the specifications of section 2 say what it does. These are the limits the board is designed to: the ±25&nbsp;V on the inputs and the discharge have not been tested on a board yet.</p>
+<table>
+  <thead><tr><th class="w-par">Parameter</th><th class="v w-n">Min</th><th class="v w-n">Max</th><th class="v w-u">Unit</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td class="p">Pod inputs A0–A7 and B0–B7</td><td class="v">−25</td><td class="v">+25</td><td class="v">V</td><td>To ground, continuously, powered or not</td></tr>
+    <tr><td class="p">Trigger input</td><td class="v">0</td><td class="v">5.5</td><td class="v">V</td><td></td></tr>
+    <tr><td class="p">Trigger output</td><td class="v"></td><td class="v"></td><td class="v"></td><td>An output: do not drive it</td></tr>
+    <tr><td class="p">Supply, USB-C or the Pi's 5 V pins</td><td class="v"></td><td class="v">5.5</td><td class="v">V</td><td></td></tr>
+    <tr><td class="p">Pi bus lines, jumpers closed</td><td class="v">0</td><td class="v">3.6</td><td class="v">V</td><td>3.3 V logic only. They do not tolerate 5 V</td></tr>
+    <tr><td class="p">Electrostatic discharge</td><td class="v"></td><td class="v">±8</td><td class="v">kV</td><td>Contact, IEC 61000-4-2, on the USB-C, pod and trigger pins</td></tr>
+    <tr><td class="p">Ambient temperature, operating</td><td class="v">0</td><td class="v">40</td><td class="v">°C</td><td>Indoors</td></tr>
+  </tbody>
+</table>
+<p>The inputs are not isolated. Their ground is the USB cable's ground and the Raspberry Pi's ground: see <b>section 9, Probing and safety</b>.</p>
+</section>
+
+<!-- ============================== 4 BOARD LAYOUT ============================== -->
+<section class="newpage">
+<h2 id="s4"><span class="n">4</span> Board layout</h2>
+<p>Everything you plug into is on an edge: the pods and the trigger header on the front edge, USB-C on the right, the 40-pin header along the back. Signals run from the pods through the input channels to the FPGA in the middle and the FX3 at the back right. Positions are as seen from the component side, with the pods nearest you.</p>
+<figure>
+<svg class="dg" viewBox="0 0 1820 997" role="img" aria-labelledby="dgf dgf-d">
+<title id="dgf">Front of the Logic Boole 16 board, labelled</title><desc id="dgf-d">Front of the Logic Boole 16 board, labelled: 40-pin stacking header; Pi bus jumpers; Power from USB or the Pi; A threshold for each pod; 16 fast comparators; Status LEDs; Pod A: channels A0–A7; 4 × M2.5 mounting holes; Infineon FX3; Spartan-6 FPGA; USB-C; Protected inputs; Trigger in and out; Pod B: channels B0–B7.</desc>
+<image href="../hardware/images/front.jpg" x="464.8" y="30.0" width="890.4" height="932.8"/>
+<polyline class="dg-l" points="438.0,77.7 448.0,77.7 793.4,77.7"/>
+<polyline class="dg-l" points="438.0,159.7 448.0,159.7 715.0,145.5"/>
+<polyline class="dg-l" points="438.0,241.7 448.0,241.7 498.7,239.9"/>
+<polyline class="dg-l" points="438.0,390.4 448.0,390.4 597.3,390.4"/>
+<polyline class="dg-l" points="438.0,628.9 448.0,628.9 528.4,628.9"/>
+<polyline class="dg-l" points="438.0,850.0 448.0,850.0 509.3,909.8"/>
+<polyline class="dg-l" points="438.0,940.0 448.0,940.0 645.0,926.8"/>
+<polyline class="dg-l" points="1382.0,77.7 1372.0,77.7 1307.5,77.7"/>
+<polyline class="dg-l" points="1382.0,252.6 1372.0,252.6 1185.6,252.6"/>
+<polyline class="dg-l" points="1382.0,363.9 1372.0,363.9 968.3,363.9"/>
+<polyline class="dg-l" points="1382.0,507.0 1372.0,507.0 1281.0,507.0"/>
+<polyline class="dg-l" points="1382.0,694.6 1372.0,694.6 1188.2,694.6"/>
+<polyline class="dg-l" points="1382.0,822.0 1372.0,822.0 894.1,820.8"/>
+<polyline class="dg-l" points="1382.0,940.0 1372.0,940.0 1132.6,926.8"/>
+<circle class="dg-p" cx="793.4" cy="77.7" r="7"/>
+<circle class="dg-p" cx="715.0" cy="145.5" r="7"/>
+<circle class="dg-p" cx="498.7" cy="239.9" r="7"/>
+<circle class="dg-p" cx="597.3" cy="390.4" r="7"/>
+<circle class="dg-p" cx="528.4" cy="628.9" r="7"/>
+<circle class="dg-p" cx="509.3" cy="909.8" r="7"/>
+<circle class="dg-p" cx="645.0" cy="926.8" r="7"/>
+<circle class="dg-p" cx="1307.5" cy="77.7" r="7"/>
+<circle class="dg-p" cx="1185.6" cy="252.6" r="7"/>
+<circle class="dg-p" cx="968.3" cy="363.9" r="7"/>
+<circle class="dg-p" cx="1281.0" cy="507.0" r="7"/>
+<circle class="dg-p" cx="1188.2" cy="694.6" r="7"/>
+<circle class="dg-p" cx="894.1" cy="820.8" r="7"/>
+<circle class="dg-p" cx="1132.6" cy="926.8" r="7"/>
+<text class="dg-t" x="430" y="84.7" text-anchor="end">40-pin stacking header</text>
+<text class="dg-s" x="430" y="110.7" text-anchor="end">The Pi's pins pass through to the top</text>
+<text class="dg-t" x="430" y="166.7" text-anchor="end">Pi bus jumpers</text>
+<text class="dg-s" x="430" y="192.7" text-anchor="end">Open as shipped. For a design of your own</text>
+<text class="dg-t" x="430" y="248.7" text-anchor="end">Power from USB or the Pi</text>
+<text class="dg-s" x="430" y="274.7" text-anchor="end">Ideal diodes. It never feeds the Pi</text>
+<text class="dg-t" x="430" y="397.4" text-anchor="end">A threshold for each pod</text>
+<text class="dg-s" x="430" y="423.4" text-anchor="end">0.3–3 V, pod A and pod B set separately</text>
+<text class="dg-t" x="430" y="635.9" text-anchor="end">16 fast comparators</text>
+<text class="dg-s" x="430" y="661.9" text-anchor="end">Hysteresis on every channel</text>
+<text class="dg-t" x="430" y="857.0" text-anchor="end">Status LEDs</text>
+<text class="dg-s" x="430" y="883.0" text-anchor="end">Power, armed, triggered</text>
+<text class="dg-t" x="430" y="947.0" text-anchor="end">Pod A: channels A0–A7</text>
+<text class="dg-s" x="430" y="973.0" text-anchor="end">Keyed, a ground beside every signal</text>
+<text class="dg-t" x="1390" y="84.7" text-anchor="start">4 × M2.5 mounting holes</text>
+<text class="dg-s" x="1390" y="110.7" text-anchor="start">On the Pi's pattern. Spacers in the box</text>
+<text class="dg-t" x="1390" y="259.6" text-anchor="start">Infineon FX3</text>
+<text class="dg-s" x="1390" y="285.6" text-anchor="start">USB 3 at 5 Gbit/s, USB 2.0 as a fallback</text>
+<text class="dg-t" x="1390" y="370.9" text-anchor="start">Spartan-6 FPGA</text>
+<text class="dg-s" x="1390" y="396.9" text-anchor="start">Samples at 200 MS/s, triggers in hardware</text>
+<text class="dg-t" x="1390" y="514.0" text-anchor="start">USB-C</text>
+<text class="dg-s" x="1390" y="540.0" text-anchor="start">Power and data on one cable, either way up</text>
+<text class="dg-t" x="1390" y="701.6" text-anchor="start">Protected inputs</text>
+<text class="dg-s" x="1390" y="727.6" text-anchor="start">Divider, clamp and ESD diode on each</text>
+<text class="dg-t" x="1390" y="829.0" text-anchor="start">Trigger in and out</text>
+<text class="dg-s" x="1390" y="855.0" text-anchor="start">3.3 V logic. The input tolerates 5 V</text>
+<text class="dg-t" x="1390" y="947.0" text-anchor="start">Pod B: channels B0–B7</text>
+<text class="dg-s" x="1390" y="973.0" text-anchor="start">Its own threshold: two logic levels at once</text>
+</svg>
+<figcaption><b>Figure 1.</b> Front (component side), labelled. Render of the revision C design.</figcaption>
+</figure>
+<h3>Front</h3>
+<table>
+  <thead><tr><th style="width:19%">Where</th><th style="width:23%">What</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td>Front edge, left</td><td class="p">Pod A</td><td>Channels A0–A7. Keyed 2 × 8 box header, with each channel's name printed above its pin</td></tr>
+    <tr><td>Front edge, middle</td><td class="p">Trigger header</td><td>3 pins, marked TRIG: IN, OUT and − (ground)</td></tr>
+    <tr><td>Front edge, right</td><td class="p">Pod B</td><td>Channels B0–B7, with their own threshold</td></tr>
+    <tr><td>Behind the pods</td><td class="p">16 input channels</td><td>An ESD diode, a divider and a clamp for each channel, then eight dual comparators</td></tr>
+    <tr><td>Left edge</td><td class="p">Thresholds</td><td>A 2.5 V reference and one threshold circuit for each pod</td></tr>
+    <tr><td>Middle</td><td class="p">Spartan-6 FPGA</td><td>Samples, triggers, filters and buffers, on a 100 MHz clock made from a 24 MHz oscillator</td></tr>
+    <tr><td>Back right</td><td class="p">FX3 USB controller</td><td>Carries the samples to the host</td></tr>
+    <tr><td>Right edge</td><td class="p">USB-C</td><td>Power and data, marked USB 3. The plug goes in from the right</td></tr>
+    <tr><td>Back edge</td><td class="p">40-pin stacking header</td><td>Fitted from underneath. Its pins come through the top for a second HAT</td></tr>
+    <tr><td>In front of the header, left</td><td class="p">Pi bus jumpers</td><td>Nine solder jumpers, open as shipped, and the ID address jumper. See section 5</td></tr>
+    <tr><td>Back left</td><td class="p">Power</td><td>Two ideal diodes take 5 V from USB or from the Pi. Regulators make 3.3 V, 1.8 V and 1.2 V</td></tr>
+    <tr><td>Front left corner</td><td class="p">Status LEDs</td><td>PWR, ARM and TRIG, named on the board. See section 6</td></tr>
+    <tr><td>Left of the FPGA, right edge</td><td class="p">Programming pads</td><td>FPGA JTAG and FX3 JTAG, for a Tag-Connect cable. Nothing is fitted. See section 11</td></tr>
+    <tr><td>Back and middle</td><td class="p">4 × M2.5 holes</td><td>On the Raspberry Pi's pattern, joined to ground</td></tr>
+  </tbody>
+</table>
+<figure class="narrow">
+<svg class="dg" viewBox="0 0 1560 730" role="img" aria-labelledby="dgb dgb-d">
+<title id="dgb">Back of the Logic Boole 16 board, labelled</title><desc id="dgb-d">Back of the Logic Boole 16 board, labelled: Flat underneath; Pod pin map; The main figures, printed on; 40-pin header; JTAG access; Name and revision.</desc>
+<image href="../hardware/images/back.jpg" x="460.0" y="30.0" width="640.0" height="670.5"/>
+<polyline class="dg-l" points="438.0,266.2 448.0,266.2 597.1,266.2"/>
+<polyline class="dg-l" points="438.0,400.3 448.0,400.3 543.8,400.3"/>
+<polyline class="dg-l" points="438.0,480.3 448.0,480.3 543.8,461.2"/>
+<polyline class="dg-l" points="1122.0,75.0 1112.0,75.0 886.7,75.0"/>
+<polyline class="dg-l" points="1122.0,216.7 1112.0,216.7 928.6,216.7"/>
+<polyline class="dg-l" points="1122.0,649.4 1112.0,649.4 1057.3,649.4"/>
+<circle class="dg-p" cx="597.1" cy="266.2" r="7"/>
+<circle class="dg-p" cx="543.8" cy="400.3" r="7"/>
+<circle class="dg-p" cx="543.8" cy="461.2" r="7"/>
+<circle class="dg-p" cx="886.7" cy="75.0" r="7"/>
+<circle class="dg-p" cx="928.6" cy="216.7" r="7"/>
+<circle class="dg-p" cx="1057.3" cy="649.4" r="7"/>
+<text class="dg-t" x="430" y="273.2" text-anchor="end">Flat underneath</text>
+<text class="dg-s" x="430" y="299.2" text-anchor="end">Only the stacking header is fitted here</text>
+<text class="dg-t" x="430" y="407.3" text-anchor="end">Pod pin map</text>
+<text class="dg-s" x="430" y="433.3" text-anchor="end">Odd pins are channels 0–7, even are ground</text>
+<text class="dg-t" x="430" y="487.3" text-anchor="end">The main figures, printed on</text>
+<text class="dg-s" x="430" y="513.3" text-anchor="end">Rate, logic levels, threshold, input limits</text>
+<text class="dg-t" x="1130" y="82.0" text-anchor="start">40-pin header</text>
+<text class="dg-s" x="1130" y="108.0" text-anchor="start">Plugs onto a Raspberry Pi 4 or 5</text>
+<text class="dg-t" x="1130" y="223.7" text-anchor="start">JTAG access</text>
+<text class="dg-s" x="1130" y="249.7" text-anchor="start">Tag-Connect pads on the front, legs latch here</text>
+<text class="dg-t" x="1130" y="656.4" text-anchor="start">Name and revision</text>
+<text class="dg-s" x="1130" y="682.4" text-anchor="start">Logic Boole 16, revision C</text>
+</svg>
+<figcaption><b>Figure 2.</b> Back, seen from behind, so left and right are swapped. The stacking header's socket is fitted here; it is not drawn.</figcaption>
+</figure>
+<h3>Back</h3>
+<p>Only the stacking header's socket is fitted here. The rest is print.</p>
+<table>
+  <thead><tr><th style="width:24%">What</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td class="p">Stacking header socket</td><td>13.5 mm tall. It plugs onto the Raspberry Pi's 40 pins and sets the 16 mm spacing</td></tr>
+    <tr><td class="p">Pod pin map</td><td>Odd pins are channels 0–7, even pins are ground</td></tr>
+    <tr><td class="p">Main figures</td><td>Sample rate, logic levels, threshold range and input limits</td></tr>
+    <tr><td class="p">JTAG labels</td><td>FPGA JTAG and FX3 JTAG, where the Tag-Connect cable's legs latch</td></tr>
+    <tr><td class="p">Name and revision</td><td>Logic Boole 16, revision C</td></tr>
+  </tbody>
+</table>
+<h3>Test points</h3>
+<p>39 pads of 1 mm on the front bring out every supply rail, the 2.5&nbsp;V reference, both thresholds, channel 0 of each pod, the FPGA's configuration lines and its 24&nbsp;MHz clock. They are not named on the board.</p>
+</section>
+
+<!-- ============================== 5 CONNECTIONS ============================== -->
+<section>
+<h2 id="s5"><span class="n">5</span> Connections</h2>
+<h3>Pods A and B: 2 × 8 box headers, 2.54 mm</h3>
+<ul>
+  <li><b>Odd pins are the channels</b>: pin 1 is channel 0 and pin 15 is channel 7. <b>Every even pin is ground.</b></li>
+  <li>The shroud is keyed, so a cable cannot go in reversed or offset. A standard 16-way ribbon cable puts a ground wire between every two signal wires.</li>
+  <li>The board's print names every pin: the channel above each signal pin, and + and − (SIG and GND) at the ends of the two rows.</li>
+</ul>
+<figure class="bd">
+<svg viewBox="0 0 1000 196" role="img" aria-labelledby="pn-t pn-d">
+  <title id="pn-t">Pod and trigger pins, looking into the connectors</title>
+  <desc id="pn-d">Looking into the connectors from the front edge with the parts facing up. Pod A is on the left: its upper row is A7 to A0 from left to right, pins 15 to 1, and its lower row is ground, pins 16 to 2. The trigger header is in the middle: ground, trigger out, trigger in. Pod B is on the right: B7 to B0 over ground.</desc>
+  <!-- POD A -->
+  <rect class="shr" x="20" y="54" width="384" height="104" rx="6"/>
+  <text class="t" x="212" y="24" text-anchor="middle">POD A</text>
+  <text class="t" x="786" y="24" text-anchor="middle">POD B</text>
+  <text class="t" x="499" y="24" text-anchor="middle">TRIG</text>
+  <rect class="shr" x="594" y="54" width="384" height="104" rx="6"/>
+  <text class="ch" x="58" y="46" text-anchor="middle">A7</text>
+  <rect class="pin sg" x="43" y="64" width="30" height="30" rx="3"/><text class="k" x="58" y="84" text-anchor="middle">15</text>
+  <rect class="pin" x="43" y="118" width="30" height="30" rx="3"/><text class="k" x="58" y="138" text-anchor="middle">16</text>
+  <text class="ch" x="102" y="46" text-anchor="middle">A6</text>
+  <rect class="pin sg" x="87" y="64" width="30" height="30" rx="3"/><text class="k" x="102" y="84" text-anchor="middle">13</text>
+  <rect class="pin" x="87" y="118" width="30" height="30" rx="3"/><text class="k" x="102" y="138" text-anchor="middle">14</text>
+  <text class="ch" x="146" y="46" text-anchor="middle">A5</text>
+  <rect class="pin sg" x="131" y="64" width="30" height="30" rx="3"/><text class="k" x="146" y="84" text-anchor="middle">11</text>
+  <rect class="pin" x="131" y="118" width="30" height="30" rx="3"/><text class="k" x="146" y="138" text-anchor="middle">12</text>
+  <text class="ch" x="190" y="46" text-anchor="middle">A4</text>
+  <rect class="pin sg" x="175" y="64" width="30" height="30" rx="3"/><text class="k" x="190" y="84" text-anchor="middle">9</text>
+  <rect class="pin" x="175" y="118" width="30" height="30" rx="3"/><text class="k" x="190" y="138" text-anchor="middle">10</text>
+  <text class="ch" x="234" y="46" text-anchor="middle">A3</text>
+  <rect class="pin sg" x="219" y="64" width="30" height="30" rx="3"/><text class="k" x="234" y="84" text-anchor="middle">7</text>
+  <rect class="pin" x="219" y="118" width="30" height="30" rx="3"/><text class="k" x="234" y="138" text-anchor="middle">8</text>
+  <text class="ch" x="278" y="46" text-anchor="middle">A2</text>
+  <rect class="pin sg" x="263" y="64" width="30" height="30" rx="3"/><text class="k" x="278" y="84" text-anchor="middle">5</text>
+  <rect class="pin" x="263" y="118" width="30" height="30" rx="3"/><text class="k" x="278" y="138" text-anchor="middle">6</text>
+  <text class="ch" x="322" y="46" text-anchor="middle">A1</text>
+  <rect class="pin sg" x="307" y="64" width="30" height="30" rx="3"/><text class="k" x="322" y="84" text-anchor="middle">3</text>
+  <rect class="pin" x="307" y="118" width="30" height="30" rx="3"/><text class="k" x="322" y="138" text-anchor="middle">4</text>
+  <text class="ch" x="366" y="46" text-anchor="middle">A0</text>
+  <rect class="pin sg" x="351" y="64" width="30" height="30" rx="3"/><text class="k" x="366" y="84" text-anchor="middle">1</text>
+  <rect class="pin" x="351" y="118" width="30" height="30" rx="3"/><text class="k" x="366" y="138" text-anchor="middle">2</text>
+  <text class="ch" x="632" y="46" text-anchor="middle">B7</text>
+  <rect class="pin sg" x="617" y="64" width="30" height="30" rx="3"/><text class="k" x="632" y="84" text-anchor="middle">15</text>
+  <rect class="pin" x="617" y="118" width="30" height="30" rx="3"/><text class="k" x="632" y="138" text-anchor="middle">16</text>
+  <text class="ch" x="676" y="46" text-anchor="middle">B6</text>
+  <rect class="pin sg" x="661" y="64" width="30" height="30" rx="3"/><text class="k" x="676" y="84" text-anchor="middle">13</text>
+  <rect class="pin" x="661" y="118" width="30" height="30" rx="3"/><text class="k" x="676" y="138" text-anchor="middle">14</text>
+  <text class="ch" x="720" y="46" text-anchor="middle">B5</text>
+  <rect class="pin sg" x="705" y="64" width="30" height="30" rx="3"/><text class="k" x="720" y="84" text-anchor="middle">11</text>
+  <rect class="pin" x="705" y="118" width="30" height="30" rx="3"/><text class="k" x="720" y="138" text-anchor="middle">12</text>
+  <text class="ch" x="764" y="46" text-anchor="middle">B4</text>
+  <rect class="pin sg" x="749" y="64" width="30" height="30" rx="3"/><text class="k" x="764" y="84" text-anchor="middle">9</text>
+  <rect class="pin" x="749" y="118" width="30" height="30" rx="3"/><text class="k" x="764" y="138" text-anchor="middle">10</text>
+  <text class="ch" x="808" y="46" text-anchor="middle">B3</text>
+  <rect class="pin sg" x="793" y="64" width="30" height="30" rx="3"/><text class="k" x="808" y="84" text-anchor="middle">7</text>
+  <rect class="pin" x="793" y="118" width="30" height="30" rx="3"/><text class="k" x="808" y="138" text-anchor="middle">8</text>
+  <text class="ch" x="852" y="46" text-anchor="middle">B2</text>
+  <rect class="pin sg" x="837" y="64" width="30" height="30" rx="3"/><text class="k" x="852" y="84" text-anchor="middle">5</text>
+  <rect class="pin" x="837" y="118" width="30" height="30" rx="3"/><text class="k" x="852" y="138" text-anchor="middle">6</text>
+  <text class="ch" x="896" y="46" text-anchor="middle">B1</text>
+  <rect class="pin sg" x="881" y="64" width="30" height="30" rx="3"/><text class="k" x="896" y="84" text-anchor="middle">3</text>
+  <rect class="pin" x="881" y="118" width="30" height="30" rx="3"/><text class="k" x="896" y="138" text-anchor="middle">4</text>
+  <text class="ch" x="940" y="46" text-anchor="middle">B0</text>
+  <rect class="pin sg" x="925" y="64" width="30" height="30" rx="3"/><text class="k" x="940" y="84" text-anchor="middle">1</text>
+  <rect class="pin" x="925" y="118" width="30" height="30" rx="3"/><text class="k" x="940" y="138" text-anchor="middle">2</text>
+  <text class="ch" x="455" y="108" text-anchor="middle">GND</text>
+  <rect class="pin" x="440" y="118" width="30" height="30" rx="3"/><text class="k" x="455" y="138" text-anchor="middle">3</text>
+  <text class="ch" x="499" y="108" text-anchor="middle">OUT</text>
+  <rect class="pin sg" x="484" y="118" width="30" height="30" rx="3"/><text class="k" x="499" y="138" text-anchor="middle">2</text>
+  <text class="ch" x="543" y="108" text-anchor="middle">IN</text>
+  <rect class="pin sg" x="528" y="118" width="30" height="30" rx="3"/><text class="k" x="543" y="138" text-anchor="middle">1</text>
+  <text class="m" x="20" y="186">Upper row: signals. Lower row, next to the board: ground.</text>
+  <text class="m" x="978" y="186" text-anchor="end">Numbers are the connector's pin numbers.</text>
+</svg>
+<figcaption><b>Figure 3.</b> Looking into the connectors from the front edge, parts facing up.</figcaption>
+</figure>
+<table>
+  <thead><tr><th style="width:15%">Pin</th><th style="width:19%">Name</th><th style="width:11%">Type</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td>1, 3, 5 … 15</td><td class="sig">A0–A7, B0–B7</td><td>Input</td><td>Logic inputs for 1.2 to 5 V signals: 1 MΩ and 10 pF to ground, ±25 V at most. Any input can also take the circuit's own clock as the capture clock (section 6)</td></tr>
+    <tr><td>2, 4, 6 … 16</td><td class="sig">GND</td><td>Ground</td><td>One beside every signal pin. All sixteen are the board's ground</td></tr>
+  </tbody>
+</table>
+
+<h3>Trigger header: 3 pins, 2.54 mm</h3>
+<table>
+  <thead><tr><th style="width:15%">Pin</th><th style="width:19%">Name</th><th style="width:11%">Type</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td class="sig">TRIG IN</td><td>Input</td><td>An edge here can be a stage of the trigger, so another instrument can start a capture. 3.3 V logic, and it tolerates 5 V. Schmitt-trigger input behind 100 Ω, with 100 kΩ to ground</td></tr>
+    <tr><td>2</td><td class="sig">TRIG OUT</td><td>Output</td><td>Goes high 75 to 80 ns after the trigger sample and stays high to the capture's last sample, to start a scope or a second analyzer. 3.3 V CMOS through 33 Ω</td></tr>
+    <tr><td>3</td><td class="sig">GND</td><td>Ground</td><td>Marked −</td></tr>
+  </tbody>
+</table>
+
+<h3>USB-C: power and data</h3>
+<ul>
+  <li>One cable carries both, and the plug works either way up.</li>
+  <li>Use a cable rated for USB&nbsp;3 (5&nbsp;Gbit/s). A charge-only or USB&nbsp;2.0 cable links at USB&nbsp;2.0 speed.</li>
+  <li>The board draws about 0.2&nbsp;A, 0.5&nbsp;A at most, and never supplies power to the cable.</li>
+</ul>
+
+<h3>40-pin header</h3>
+<p>A stacking header in the Raspberry Pi's pinout. All 40 pins pass through to the top of the board for a second HAT. The board itself connects only to these:</p>
+<table>
+  <thead><tr><th style="width:24%">Pins</th><th style="width:17%">Name</th><th style="width:11%">Type</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td>2, 4</td><td class="sig">5 V</td><td>Power in</td><td>Power from the Pi. The board never feeds power back into these pins</td></tr>
+    <tr><td>1, 17</td><td class="sig">3.3 V</td><td>Power in</td><td>Supplies the ID EEPROM and tells the board that the Pi is running. In the Pi's standby state, with no USB host attached, the board switches itself off</td></tr>
+    <tr><td>27, 28</td><td class="sig">ID_SD, ID_SC</td><td>I²C</td><td>HAT+ ID EEPROM, at address 0x51</td></tr>
+    <tr><td>6, 9, 14, 20, 25, 30, 34, 39</td><td class="sig">GND</td><td>Ground</td><td></td></tr>
+    <tr><td>3, 5, 8, 10, 19, 21, 23, 24, 26</td><td class="sig">GPIO</td><td>Optional</td><td>Only through the Pi bus jumpers below, which are open as shipped</td></tr>
+  </tbody>
+</table>
+
+<h3>Pi bus jumpers</h3>
+<p>Nine solder jumpers beside the 40-pin header, open as shipped. Closing one connects a Pi pin to a pin of the FPGA through 1&nbsp;kΩ, and a capture can then take that line in place of the pod channel in the table, with no leads (section 6). The lines are the Pi's I²C1, UART and SPI0. The FPGA's pins are inputs with a pull-down, so an open jumper reads low. <b>Simulated; not yet run on a board.</b></p>
+<div class="three">
+<table class="pin">
+  <thead><tr><th style="width:21%">Jumper</th><th style="width:13%;text-align:center">Pin</th><th>Line</th><th style="width:24%">Channel</th></tr></thead>
+  <tbody>
+    <tr><td>JP2</td><td>3</td><td class="sig">GPIO2 · SDA</td><td class="sig">A0</td></tr>
+    <tr><td>JP3</td><td>5</td><td class="sig">GPIO3 · SCL</td><td class="sig">A1</td></tr>
+    <tr><td>JP9</td><td>8</td><td class="sig">GPIO14 · TXD</td><td class="sig">A2</td></tr>
+    <tr><td>JP10</td><td>10</td><td class="sig">GPIO15 · RXD</td><td class="sig">A3</td></tr>
+    <tr><td>JP7</td><td>19</td><td class="sig">GPIO10 · MOSI</td><td class="sig">A4</td></tr>
+  </tbody>
+</table>
+<table class="pin">
+  <thead><tr><th style="width:21%">Jumper</th><th style="width:13%;text-align:center">Pin</th><th>Line</th><th style="width:24%">Channel</th></tr></thead>
+  <tbody>
+    <tr><td>JP6</td><td>21</td><td class="sig">GPIO9 · MISO</td><td class="sig">A5</td></tr>
+    <tr><td>JP8</td><td>23</td><td class="sig">GPIO11 · SCLK</td><td class="sig">A6</td></tr>
+    <tr><td>JP5</td><td>24</td><td class="sig">GPIO8 · CE0</td><td class="sig">A7</td></tr>
+    <tr><td>JP4</td><td>26</td><td class="sig">GPIO7 · CE1</td><td class="sig">B0</td></tr>
+    <tr><td>JP1</td><td></td><td colspan="2">ID address: 0x51, or 0x50</td></tr>
+  </tbody>
+</table>
+<figure class="jp">
+<svg viewBox="0 0 1075 700" role="img" aria-labelledby="jpf jpf-d">
+<title id="jpf">Close-up of the nine Pi bus solder jumpers</title><desc id="jpf-d">Two rows of solder jumpers below the left end of the 40-pin header. Upper row, left to right: JP7 MOSI, JP10 RXD, JP9 TXD, JP3 SCL, JP2 SDA. Lower row, under the last four: JP4 CE1, JP5 CE0, JP8 SCLK, JP6 MISO.</desc>
+<image href="datasheet/img/pi_jumpers.jpg" x="0" y="100" width="1075" height="500"/>
+<path class="dg-l" d="M168 92 V140"/>
+<text class="jp-n" x="168" y="40" text-anchor="middle">JP7</text><text class="jp-s" x="168" y="80" text-anchor="middle">MOSI</text>
+<path class="dg-l" d="M352 92 V140"/>
+<text class="jp-n" x="352" y="40" text-anchor="middle">JP10</text><text class="jp-s" x="352" y="80" text-anchor="middle">RXD</text>
+<path class="dg-l" d="M534 92 V140"/>
+<text class="jp-n" x="534" y="40" text-anchor="middle">JP9</text><text class="jp-s" x="534" y="80" text-anchor="middle">TXD</text>
+<path class="dg-l" d="M716 92 V140"/>
+<text class="jp-n" x="716" y="40" text-anchor="middle">JP3</text><text class="jp-s" x="716" y="80" text-anchor="middle">SCL</text>
+<path class="dg-l" d="M898 92 V140"/>
+<text class="jp-n" x="898" y="40" text-anchor="middle">JP2</text><text class="jp-s" x="898" y="80" text-anchor="middle">SDA</text>
+<path class="dg-l" d="M352 608 V552"/>
+<text class="jp-n" x="352" y="646" text-anchor="middle">JP4</text><text class="jp-s" x="352" y="686" text-anchor="middle">CE1</text>
+<path class="dg-l" d="M534 608 V552"/>
+<text class="jp-n" x="534" y="646" text-anchor="middle">JP5</text><text class="jp-s" x="534" y="686" text-anchor="middle">CE0</text>
+<path class="dg-l" d="M716 608 V552"/>
+<text class="jp-n" x="716" y="646" text-anchor="middle">JP8</text><text class="jp-s" x="716" y="686" text-anchor="middle">SCLK</text>
+<path class="dg-l" d="M898 608 V552"/>
+<text class="jp-n" x="898" y="646" text-anchor="middle">JP6</text><text class="jp-s" x="898" y="686" text-anchor="middle">MISO</text>
+</svg>
+<figcaption><b>Figure 4.</b> The bus jumpers, below the left end of the 40-pin header. To close one, bridge its two pads with solder.</figcaption>
+</figure>
+<div class="tip jp-tip">
+  <div class="h">If you close a bus jumper</div>
+  <p>With any of JP2 to JP10 closed the board uses GPIO pins, so it is no longer a stackable HAT+. Move JP1 to 0x50 as well, which tells the Pi that it is a standard HAT+. A second HAT on top must then not use the same pins.</p>
+</div>
+</div>
+
+<h3>Wiring examples</h3>
+<table>
+  <thead><tr><th style="width:31%">To do this</th><th>Connect</th></tr></thead>
+  <tbody>
+    <tr><td class="p">Capture signals at one logic level</td><td>The signals to odd pins of either pod, and at least one lead from an even pin to the circuit's ground</td></tr>
+    <tr><td class="p">Capture two logic levels at once</td><td>One level on pod A and the other on pod B. Each pod has its own threshold</td></tr>
+    <tr><td class="p">Sample on the circuit's own clock</td><td>The clock to any input, the data to the other channels</td></tr>
+    <tr><td class="p">Trigger a scope from the analyzer</td><td>Trigger header pin 2 (OUT) to the scope's external trigger input, pin 3 to its ground</td></tr>
+    <tr><td class="p">Start a capture from another instrument</td><td>Its 3.3 V or 5 V logic output to trigger header pin 1 (IN), its ground to pin 3</td></tr>
+    <tr><td class="p">Add a second HAT</td><td>Plug it onto the pins on top. As shipped the board uses none of the Pi's GPIO</td></tr>
+  </tbody>
+</table>
+</section>
+
+<!-- ============================== 6 CAPTURE AND TRIGGERS ============================== -->
+<section>
+<h2 id="s6"><span class="n">6</span> Capture and triggers</h2>
+<p>The board has no switches or trimmers: everything in this section is set from the host over USB. Samples go to the host as they are taken, so a capture can run for as long as the host has memory. The board keeps no capture of its own.</p>
+<h3>What the link carries</h3>
+<table>
+  <thead><tr><th style="width:21%">Format and link</th><th style="width:27%">What it carries</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td class="p">Raw, USB 3</td><td>16 channels at up to 100 MS/s</td><td>For any signal, however busy the lines are: two samples in each 32-bit word, 200 MB/s at 100 MS/s</td></tr>
+    <tr><td class="p">Run-length, USB 3</td><td>16 channels at 200 MS/s</td><td>For signals that change in up to 96 million samples a second: I²C, SPI, UART and most buses, and a clock up to 48 MHz. Lossless</td></tr>
+    <tr><td class="p">Any signal at 200 MS/s</td><td>892,928 samples, 4.5 ms</td><td>Signals that change in every sample are more than the link carries. The capture ends when the board's buffers are full</td></tr>
+    <tr><td class="p">USB 2.0</td><td>16 channels at up to 22 MS/s raw</td><td>On a USB 2.0 port or cable: 44 MB/s. Run-length at 200 MS/s for signals that change in up to 11 million samples a second</td></tr>
+  </tbody>
+</table>
+
+<div class="two even">
+  <div>
+    <h3>Streaming</h3>
+    <p>A capture has no gaps. If the samples come faster than the link and the host take them, the FPGA's buffer of 8192 words fills, sampling stops, and the capture says that it overflowed. What arrived is the capture's beginning, whole to its last sample.</p>
+    <p>All 16 channels at 200&nbsp;MS/s are 3.2&nbsp;Gbit/s of raw samples, more than the link carries. In the run-length format the FPGA sends a word only for a sample that differs from the one before, with the time the inputs then stayed as they were. Real buses have enough idle time to fit. A signal that changes in every sample does not: capture it at 100&nbsp;MS/s, or take the 4.5&nbsp;ms that fit.</p>
+    <h3>Before the trigger</h3>
+    <p>While a capture waits for its trigger the FPGA keeps the newest 8184 words, so the capture also holds what came before: 16,368 samples in the raw format, and far more time on quiet signals in the run-length format. A trigger that comes soon after the start has less before it.</p>
+    <h3>Capture clock</h3>
+    <p>In place of a sample rate, the analyzer can keep one sample at each edge of a clock from the circuit under test, up to 50&nbsp;MHz: its rising edges, its falling edges or both, on any input. The inputs are still looked at every 5&nbsp;ns, and the sample kept is the one from just before the edge, so the data must be steady 15&nbsp;ns before it.</p>
+  </div>
+  <div>
+    <h3>Triggers</h3>
+    <p>The trigger is in the FPGA and looks at every sample, at any sample rate. It has up to four stages, met one after the other. A stage is one of:</p>
+    <ul>
+      <li><b>Levels</b>: a mask and a value across all 16 channels.</li>
+      <li><b>Edges</b>: rising or falling, on any channels, with levels on others.</li>
+      <li><b>A pulse by its length</b>: levels that held for a set range of time and have ended.</li>
+      <li><b>Levels that have lasted</b> a set time, and still hold.</li>
+      <li><b>The trigger input</b>: a rising or a falling edge.</li>
+    </ul>
+    <p>The trigger output goes high 75 to 80&nbsp;ns after the trigger sample and stays high to the capture's last sample.</p>
+    <h3>Glitch filter</h3>
+    <p>Each channel has a filter, off by default. With it set, a change counts once the channel has held its new level for the set time, from 5&nbsp;ns to 1.25&nbsp;µs. Shorter pulses are removed before the trigger and the capture. Every channel is delayed alike, so the edges that pass keep their places against each other.</p>
+  </div>
+</div>
+
+<div class="keep">
+<h3>Thresholds</h3>
+<p>Each pod has its own threshold. Set it to about half the logic level of the circuit that pod watches. The threshold is designed to land within ±100&nbsp;mV of the setting, so the table gives the window in which a channel may switch, and the room that leaves above a low and below a high.</p>
+<table>
+  <thead><tr><th style="width:22%">Logic</th><th class="v">Threshold setting</th><th class="v">Switches between</th><th class="v">Room above 0 V</th><th class="v">Room below the high level</th></tr></thead>
+  <tbody>
+    <tr><td class="p">1.2 V</td><td class="v">0.60 V</td><td class="v">0.50 – 0.70 V</td><td class="v">0.50 V</td><td class="v">0.50 V</td></tr>
+    <tr><td class="p">1.5 V</td><td class="v">0.75 V</td><td class="v">0.65 – 0.85 V</td><td class="v">0.65 V</td><td class="v">0.65 V</td></tr>
+    <tr><td class="p">1.8 V</td><td class="v">0.90 V</td><td class="v">0.80 – 1.00 V</td><td class="v">0.80 V</td><td class="v">0.80 V</td></tr>
+    <tr><td class="p">2.5 V</td><td class="v">1.25 V</td><td class="v">1.15 – 1.35 V</td><td class="v">1.15 V</td><td class="v">1.15 V</td></tr>
+    <tr><td class="p">3.3 V</td><td class="v">1.65 V</td><td class="v">1.55 – 1.75 V</td><td class="v">1.55 V</td><td class="v">1.55 V</td></tr>
+    <tr><td class="p">5 V CMOS</td><td class="v">2.50 V</td><td class="v">2.40 – 2.60 V</td><td class="v">2.40 V</td><td class="v">2.40 V</td></tr>
+    <tr><td class="p">5 V TTL levels</td><td class="v">1.40 V</td><td class="v">1.30 – 1.50 V</td><td class="v">1.30 V</td><td class="v">0.90 V, from TTL's 2.4 V high</td></tr>
+  </tbody>
+</table>
+<p>The threshold stops at 3&nbsp;V. That covers 5&nbsp;V logic at its half-way point, but not a threshold near the top of a 5&nbsp;V swing. On the first boards all 16 inputs read a 3.3&nbsp;V pattern right at every setting from 0.2 to 3.0&nbsp;V.</p>
+</div>
+
+<div class="two even">
+  <div>
+    <h3>Status LEDs</h3>
+    <table>
+      <thead><tr><th style="width:22%">LED</th><th style="width:24%">Colour</th><th>It means</th></tr></thead>
+      <tbody>
+        <tr><td class="p">PWR</td><td>Green</td><td>The board has power</td></tr>
+        <tr><td class="p">ARM</td><td>Yellow</td><td>Blinks once a second when the FPGA is loaded. On while a capture waits for its trigger</td></tr>
+        <tr><td class="p">TRIG</td><td>Green</td><td>On from the trigger, or the first sample, to the capture's last sample</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div>
+    <div class="tip" style="margin-top:4.5mm">
+      <div class="h">How it is set</div>
+      <p>In the app, or from the command line. <code>./logicboole capture reset.sr --rate 200M --time 1ms --trigger "B0=f"</code> waits for B0 to fall and keeps the millisecond after it, with some of what came before. Section 11 has the software.</p>
+      <p>On a Raspberry Pi with the bus jumpers closed, <code>--pi i2c</code>, <code>uart</code>, <code>spi</code> or <code>all</code> puts the Pi's own lines in place of channels (section 5). Not yet run on a board.</p>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== 7 GETTING STARTED ============================== -->
+<section>
+<h2 id="s7"><span class="n">7</span> Getting started</h2>
+<p>You need a host (a Mac, a Linux computer, or a Raspberry Pi 4 or 5), a USB&nbsp;3 cable with a USB-C plug for the board, and leads from the pods to your circuit. The <b>quick start guide</b>, <code>docs/quick-start.pdf</code> in the repository, goes through these steps on two pages with what each command prints.</p>
+<h3>With a computer</h3>
+<ol>
+  <li><b>Read section 9, Probing and safety.</b> The analyzer's ground is the host's ground.</li>
+  <li><b>Get the software</b>: download the repository (section 12) and open a terminal in its folder. It needs Python 3.9 or later and libusb. Nothing in it is built or installed.</li>
+  <li><b>Set the board down on something that doesn't conduct</b>, or mount it on M2.5 standoffs.</li>
+  <li><b>Plug the USB-C cable into the board and into a USB&nbsp;3 port.</b> PWR lights.</li>
+  <li><b>Run <code>./logicboole check</code>.</b> It checks the computer, loads the board, which the software does every time the board connects, and says what to do about anything that is missing. ARM then blinks. <code>./logicboole</code> opens the app in your browser.</li>
+  <li><b>Connect ground first</b>: a lead from an even pin of each pod you use to the ground of the circuit under test. Then connect the signals to the odd pins.</li>
+  <li><b>Set each pod's threshold</b> to half the logic level of the signals on it (section 6).</li>
+  <li><b>Choose a sample rate and a trigger, and start the capture.</b> ARM is on while the analyzer waits for its trigger, and TRIG when it has fired.</li>
+</ol>
+
+<h3 style="break-before:page;margin-top:0">On a Raspberry Pi</h3>
+<p>The board follows the Raspberry Pi HAT+ specification, for the Pi 4 and Pi 5. Power comes from the Pi's header and the samples go over a short USB cable to one of the Pi's USB&nbsp;3 ports.</p>
+<figure>
+<svg class="dg" viewBox="0 0 1820 758" role="img" aria-labelledby="dgp dgp-d">
+<title id="dgp">Logic Boole 16 on a Raspberry Pi 5, seen from the pod edge, labelled</title><desc id="dgp-d">Pod A; Stacking header; Pod B; USB link; The Pi's ports stay usable; Room for the Active Cooler; 16 mm spacers.</desc>
+<defs><linearGradient id="dgp-fade" x1="0" x2="1" y1="0" y2="0"><stop offset="0" style="stop-color:#ffffff;stop-opacity:0"/><stop offset="1" style="stop-color:#ffffff;stop-opacity:1"/></linearGradient></defs>
+<image href="datasheet/img/pi_side.jpg" x="110.0" y="150.0" width="1600" height="457.7"/>
+<rect x="1591.0" y="148.0" width="120" height="461.7" fill="url(#dgp-fade)"/>
+<polyline class="dg-l" points="330.0,104.0 418.8,276.0"/>
+<polyline class="dg-l" points="760.0,104.0 852.9,184.6"/>
+<polyline class="dg-l" points="1160.0,104.0 995.9,276.0"/>
+<polyline class="dg-l" points="1560.0,104.0 1401.2,270.1"/>
+<polyline class="dg-l" points="350.0,653.7 566.9,538.4"/>
+<polyline class="dg-l" points="850.0,653.7 658.3,452.9"/>
+<polyline class="dg-l" points="1370.0,653.7 1247.2,492.7"/>
+<circle class="dg-p" cx="418.8" cy="276.0" r="7"/>
+<circle class="dg-p" cx="852.9" cy="184.6" r="7"/>
+<circle class="dg-p" cx="995.9" cy="276.0" r="7"/>
+<circle class="dg-p" cx="1401.2" cy="270.1" r="7"/>
+<circle class="dg-p" cx="566.9" cy="538.4" r="7"/>
+<circle class="dg-p" cx="658.3" cy="452.9" r="7"/>
+<circle class="dg-p" cx="1247.2" cy="492.7" r="7"/>
+<text class="dg-t" x="330" y="58.0" text-anchor="middle">Pod A</text>
+<text class="dg-s" x="330" y="84.0" text-anchor="middle">Channels A0–A7</text>
+<text class="dg-t" x="760" y="58.0" text-anchor="middle">Stacking header</text>
+<text class="dg-s" x="760" y="84.0" text-anchor="middle">All 40 Pi pins come through the top</text>
+<text class="dg-t" x="1160" y="58.0" text-anchor="middle">Pod B</text>
+<text class="dg-s" x="1160" y="84.0" text-anchor="middle">Channels B0–B7</text>
+<text class="dg-t" x="1560" y="58.0" text-anchor="middle">USB link</text>
+<text class="dg-s" x="1560" y="84.0" text-anchor="middle">A short cable to the Pi's USB 3 port</text>
+<text class="dg-t" x="350" y="685.7" text-anchor="middle">The Pi's ports stay usable</text>
+<text class="dg-s" x="350" y="711.7" text-anchor="middle">Power and HDMI plug in under the board</text>
+<text class="dg-t" x="850" y="685.7" text-anchor="middle">Room for the Active Cooler</text>
+<text class="dg-s" x="850" y="711.7" text-anchor="middle">Nothing is fitted under the board</text>
+<text class="dg-t" x="1370" y="685.7" text-anchor="middle">16 mm spacers</text>
+<text class="dg-s" x="1370" y="711.7" text-anchor="middle">Four, with screws, in the box</text>
+</svg>
+<figcaption><b>Figure 5.</b> On a Raspberry Pi 5 with its Active Cooler, seen from the pod edge.</figcaption>
+</figure>
+<div class="two even">
+  <div>
+    <ol>
+      <li>Plug in any camera, display or PCIe flat cables first. They pass under the board.</li>
+      <li>Screw the four M2.5 × 16 mm spacers onto the Pi's mounting holes, from underneath, with four of the M2.5 × 6 mm screws.</li>
+      <li>Press the board's header onto the Pi's 40 pins until the board sits on the spacers, and fit the other four screws.</li>
+      <li>Connect a USB&nbsp;3 cable, USB-C to USB-A and about 20&nbsp;cm long, from the board to one of the Pi's blue USB&nbsp;3 ports.</li>
+      <li>Go on from step 5 above, with the software on the Pi.</li>
+    </ol>
+    <p><b>Power.</b> The board runs from the Pi's 5&nbsp;V pins, from USB-C, or from both at once. Ideal diodes keep each source from feeding the other, so the board never powers the Pi. When the Pi goes to standby and no USB host is powering the board, it switches itself off.</p>
+  </div>
+  <div>
+    <p><b>What stays free on the Pi</b></p>
+    <ul>
+      <li><b>All of GPIO 2 to 27.</b> As shipped the board connects to none of them, and all 40 pins come through the top for a second HAT.</li>
+      <li><b>The Pi 5 Active Cooler</b> fits underneath, with 4&nbsp;mm between its fan and the board.</li>
+      <li><b>The PoE header and the camera, display and PCIe connectors</b> are not blocked.</li>
+      <li><b>The Pi's power and HDMI sockets</b>: their plugs go in under the board's overhang, with 9&nbsp;mm to spare.</li>
+    </ul>
+    <table class="kv">
+      <tbody>
+        <tr><td>Pi 5</td><td>Each USB 3 port has its own 5 Gbit/s controller. Any USB-C plug fits</td></tr>
+        <tr><td>Pi 4</td><td>Fits. Its USB ports share one link. Use a link cable whose USB-C plug body is no thicker than 6.4 mm, because the plug sits over the Pi 4's USB sockets</td></tr>
+        <tr><td>Older 40-pin Pis</td><td>Fit, at USB 2.0 rates</td></tr>
+      </tbody>
+    </table>
+    <p class="small">The stackable HAT+ class needs current Raspberry Pi firmware.</p>
+    <div class="note">
+      <div class="h">What has run on a Pi</div>
+      <p>One board on a Pi 5's header, on the spacers, powered from the header and from USB-C at once: test data at 391&nbsp;MB/s for 10 minutes with every word right, and captures from the command line with an earlier version of the software. Not tried yet: a Pi 4, the standby switch-off, the ID EEPROM and a second HAT on top.</p>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== 8 TYPICAL APPLICATIONS ============================== -->
+<section class="newpage">
+<h2 id="s8"><span class="n">8</span> Typical applications</h2>
+<p>Settings to start from for common jobs. Every one needs a host, wired as in A or B.</p>
+<figure class="bd keep" style="margin-top:2mm">
+<svg viewBox="0 0 812 250" role="img" aria-label="Typical application wiring: A with a computer over USB-C, B on a Raspberry Pi, C with a scope on the trigger output">
+  <!-- A: with a computer -->
+  <g transform="translate(0 0)">
+    <text class="t" x="4" y="16"><tspan class="hk">A</tspan>  With a computer</text>
+    <g transform="translate(-62 0)">
+    <rect class="shr" x="70" y="34" width="130" height="100" rx="6"/>
+    <rect class="pin" x="190" y="64" width="10" height="22"/>
+    <text class="k" x="184" y="80" text-anchor="end">USB-C</text>
+    <text class="t" x="135" y="108" text-anchor="middle">Logic Boole 16</text>
+    <rect class="pin sg" x="78" y="118" width="50" height="13"/><text class="k" x="103" y="129" text-anchor="middle">POD A</text>
+    <rect class="pin sg" x="142" y="118" width="50" height="13"/><text class="k" x="167" y="129" text-anchor="middle">POD B</text>
+    <path class="wa" d="M200 75 H246"/>
+    <rect class="b" x="246" y="44" width="72" height="62" rx="4"/>
+    <text class="t" x="282" y="72" text-anchor="middle" style="font-size:13px">Computer</text><text class="m" x="282" y="90" text-anchor="middle">USB 3 port</text>
+    <path class="wa" d="M97 131 V170"/><path class="w" d="M109 131 V170"/>
+    <text class="m" x="118" y="155">signals and ground</text>
+    <rect class="b" x="70" y="170" width="130" height="36" rx="4"/>
+    <text class="t" x="135" y="193" text-anchor="middle">Circuit under test</text>
+    </g>
+    <text class="m" x="4" y="228">One USB-C cable carries power and data.</text>
+    <text class="m" x="4" y="244">The plug works either way up.</text>
+  </g>
+  <!-- B: on a Raspberry Pi -->
+  <g transform="translate(277 0)">
+    <text class="t" x="4" y="16"><tspan class="hk">B</tspan>  On a Raspberry Pi</text>
+    <g transform="translate(-62 0)">
+    <rect class="shr" x="70" y="34" width="130" height="100" rx="6"/>
+    <rect class="pin" x="84" y="34" width="102" height="9"/>
+    <text class="k" x="135" y="58" text-anchor="middle">40-PIN HEADER</text>
+    <rect class="pin" x="190" y="64" width="10" height="22"/>
+    <text class="k" x="184" y="80" text-anchor="end">USB-C</text>
+    <text class="t" x="135" y="108" text-anchor="middle">Logic Boole 16</text>
+    <rect class="pin sg" x="78" y="118" width="50" height="13"/><text class="k" x="103" y="129" text-anchor="middle">POD A</text>
+    <rect class="pin sg" x="142" y="118" width="50" height="13"/><text class="k" x="167" y="129" text-anchor="middle">POD B</text>
+    <path class="w" d="M186 38 H282 V52"/>
+    <text class="m" x="234" y="30" text-anchor="middle">5 V</text>
+    <path class="wa" d="M200 75 H246"/>
+    <rect class="b" x="246" y="52" width="72" height="62" rx="4"/>
+    <text class="t" x="282" y="78" text-anchor="middle">Pi 4 or 5</text><text class="m" x="282" y="96" text-anchor="middle">USB 3 port</text>
+    <path class="wa" d="M97 131 V170"/><path class="w" d="M109 131 V170"/>
+    <text class="m" x="118" y="155">signals and ground</text>
+    <rect class="b" x="70" y="170" width="130" height="36" rx="4"/>
+    <text class="t" x="135" y="193" text-anchor="middle">Circuit under test</text>
+    </g>
+    <text class="m" x="4" y="228">Power comes from the Pi's 40-pin header.</text>
+    <text class="m" x="4" y="244">A short USB cable carries the samples.</text>
+  </g>
+  <!-- C: with a scope -->
+  <g transform="translate(554 0)">
+    <text class="t" x="4" y="16"><tspan class="hk">C</tspan>  With a scope</text>
+    <g transform="translate(-62 0)">
+    <rect class="shr" x="70" y="34" width="130" height="100" rx="6"/>
+    <rect class="pin" x="190" y="50" width="10" height="10"/><rect class="pin" x="190" y="74" width="10" height="10"/>
+    <text class="k" x="184" y="60" text-anchor="end">2 TRIG OUT</text><text class="k" x="184" y="84" text-anchor="end">3 GND</text>
+    <text class="t" x="135" y="108" text-anchor="middle">Logic Boole 16</text>
+    <rect class="pin sg" x="78" y="118" width="50" height="13"/><text class="k" x="103" y="129" text-anchor="middle">POD A</text>
+    <rect class="pin sg" x="142" y="118" width="50" height="13"/><text class="k" x="167" y="129" text-anchor="middle">POD B</text>
+    <path class="wa" d="M200 55 H240"/><path class="w" d="M200 79 H240"/>
+    <rect class="b" x="240" y="36" width="78" height="62" rx="4"/>
+    <text class="t" x="279" y="60" text-anchor="middle">Scope</text><text class="m" x="279" y="76" text-anchor="middle">external</text><text class="m" x="279" y="90" text-anchor="middle">trigger in</text>
+    <path class="wa" d="M97 131 V170"/><path class="w" d="M109 131 V170"/>
+    <text class="m" x="118" y="155">signals and ground</text>
+    <rect class="b" x="70" y="170" width="130" height="36" rx="4"/>
+    <text class="t" x="135" y="193" text-anchor="middle">Circuit under test</text>
+    </g>
+    <text class="m" x="4" y="228">Pin 2 starts the scope on the trigger.</text>
+    <text class="m" x="4" y="244">Pin 1, IN, starts a capture instead.</text>
+  </g>
+</svg>
+<figcaption><b>Figure 6.</b> Typical application wiring. A and B are the two hosts; C adds the trigger header (section 5) to either.</figcaption>
+</figure>
+<table>
+  <thead><tr><th style="width:21%">Use</th><th style="width:27%">Start from</th><th>How</th></tr></thead>
+  <tbody>
+    <tr><td class="p">I²C bus</td><td>Threshold at half the bus voltage. Run-length format at 200 MS/s</td><td>SDA and SCL on one pod, with a ground lead. Trigger on SDA falling while SCL is high, the start of a message</td></tr>
+    <tr><td class="p">SPI bus</td><td>Threshold at half the logic level. Trigger on chip select falling</td><td>Clock, data and chip select on one pod. Sample at four or more times the clock rate: 200 MS/s suits clocks up to 50 MHz</td></tr>
+    <tr><td class="p">UART</td><td>Threshold at half the logic level. Trigger on a falling edge</td><td>One channel for each direction. The falling edge is the start bit</td></tr>
+    <tr><td class="p">Parallel bus with its clock</td><td>Capture clock, on any input</td><td>The data on the other channels. The analyzer keeps one sample for each edge of the bus's own clock, up to 50 MHz</td></tr>
+    <tr><td class="p">Two logic levels in one capture</td><td>Pod A at 0.90 V for 1.8 V logic, pod B at 1.65 V for 3.3 V</td><td>For a level shifter, or a processor with two I/O voltages: put each side on its own pod</td></tr>
+    <tr><td class="p">Timing between signals</td><td>200 MS/s</td><td>Each sample is 5 ns. The 16 inputs of one board matched within 1.4 ns</td></tr>
+    <tr><td class="p">A rare fault</td><td>A trigger on levels, edges or a pulse's length</td><td>The capture waits in the board for as long as it takes, and keeps what came just before the trigger</td></tr>
+    <tr><td class="p">Glitches and runt pulses</td><td>A pulse-length trigger, glitch filter off</td><td>Pulses down to 6 ns are captured. With the filter set, shorter ones are removed instead</td></tr>
+    <tr><td class="p">Triggering a scope</td><td>Trigger header pin 2 to the scope's external trigger (C)</td><td>The scope then shows the analog signal around the logic event that the analyzer found</td></tr>
+    <tr><td class="p">Started by another instrument</td><td>Its 3.3 V output to trigger header pin 1, and the trigger input as a stage</td><td>The capture triggers when the other instrument fires</td></tr>
+    <tr><td class="p">The Pi's own buses</td><td>Board on a Pi (B), bus jumpers closed</td><td><code>--pi i2c</code>, <code>uart</code> or <code>spi</code>: the Pi's lines in place of channels, with no leads (section 5). Not yet run on a board</td></tr>
+    <tr><td class="p">Decoding a bus</td><td>A saved capture, and <code>sigrok-cli</code> installed</td><td><code>./logicboole decode bus.lb16 i2c scl=A1 sda=A0</code> lists what one of sigrok's decoders finds</td></tr>
+    <tr><td class="p">Unattended capture on a Pi</td><td>Board on a Pi (B), with no screen</td><td>Captures from the command line over SSH, with JSON results for a script, or the app opened from another computer</td></tr>
+    <tr><td class="p">Scripts and AI agents</td><td><code>import logicboole</code>, or <code>./logicboole mcp</code></td><td>A Python package for scripts. For AI agents, a Model Context Protocol server and a skill file</td></tr>
+  </tbody>
+</table>
+<div class="tip">
+  <div class="h">Which format?</div>
+  <p>Buses with idle time stream on all 16 channels at 200&nbsp;MS/s in the run-length format. For signals that never rest, use the raw format at 100&nbsp;MS/s or less, or take the 4.5&nbsp;ms that fit at 200&nbsp;MS/s (section 6). Section 13 says what each of these uses has been tried with.</p>
+</div>
+</section>
+
+<!-- ============================== 9 PROBING AND SAFETY ============================== -->
+<section class="newpage">
+<h2 id="s9"><span class="n">9</span> Probing and safety</h2>
+<div class="warn">
+  <div class="h"><svg width="11" height="10" viewBox="0 0 22 20"><path d="M11 1 L21 19 H1 Z" fill="#c8102e"/><path d="M11 7v6M11 15.2v1.4" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg>Warnings</div>
+  <ul>
+    <li><b>Ground is common.</b> The pods' ground pins, the USB cable's ground and the Raspberry Pi's ground are one net. The inputs are not isolated: connect the analyzer's ground only to the ground of the circuit under test, never to a point at another voltage.</li>
+    <li><b>±25&nbsp;V at most on any input.</b> Do not probe mains wiring, or any circuit that is not isolated from the mains.</li>
+    <li><b>It is a bare board.</b> Keep loose wires, tools and metal off it while it is powered.</li>
+  </ul>
+</div>
+
+<h3>The input circuit</h3>
+<figure class="bd keep" style="width:86%;margin-left:auto;margin-right:auto">
+<svg viewBox="0 0 1000 252" role="img" aria-labelledby="ic-t ic-d">
+  <title id="ic-t">Input circuit of one channel</title>
+  <desc id="ic-d">From the probe pin: an ESD diode to ground, a 100 ohm series resistor, an 866 kilohm resistor with 4.7 picofarads across it, then 215 kilohms and 10 picofarads to ground and a clamp, into the inverting input of a comparator. The pod's threshold reaches the other input through 1 kilohm, and 330 kilohms from the output to that input gives the hysteresis.</desc>
+  <!-- main line -->
+  <circle class="dot" cx="40" cy="84" r="6"/><text class="t" x="24" y="60">Probe pin</text>
+  <polyline class="wa" points="46,84 150,84"/>
+  <circle class="dot" cx="104" cy="84" r="3.5"/><line class="w" x1="104" y1="84" x2="104" y2="126"/>
+  <rect class="s" x="74" y="126" width="60" height="30" rx="3"/><text x="104" y="146" text-anchor="middle">ESD</text>
+  <line class="w" x1="104" y1="156" x2="104" y2="186"/><path class="w" d="M90,186 H118 M95,192 H113 M100,198 H108"/>
+  <rect class="b" x="150" y="70" width="70" height="28" rx="2"/><text class="k" x="185" y="62" text-anchor="middle">100 Ω</text>
+  <polyline class="wa" points="220,84 284,84"/>
+  <rect class="b" x="284" y="70" width="86" height="28" rx="2"/><text class="k" x="327" y="118" text-anchor="middle">866 kΩ</text>
+  <circle class="dot" cx="254" cy="84" r="3.5"/><polyline class="w" points="254,84 254,36 318,36"/><path class="w" d="M318,24 V48 M330,24 V48"/><polyline class="w" points="330,36 400,36 400,84"/>
+  <text class="k" x="324" y="16" text-anchor="middle">4.7 pF</text>
+  <polyline class="wa" points="370,84 600,84"/>
+  <circle class="dot" cx="400" cy="84" r="3.5"/>
+  <!-- 215k to ground -->
+  <circle class="dot" cx="430" cy="84" r="3.5"/><line class="w" x1="430" y1="84" x2="430" y2="110"/>
+  <rect class="b" x="416" y="110" width="28" height="56" rx="2"/><text class="k" x="410" y="143" text-anchor="end">215 kΩ</text>
+  <line class="w" x1="430" y1="166" x2="430" y2="186"/><path class="w" d="M416,186 H444 M421,192 H439 M426,198 H434"/>
+  <!-- 10 pF to ground -->
+  <circle class="dot" cx="490" cy="84" r="3.5"/><line class="w" x1="490" y1="84" x2="490" y2="130"/><path class="w" d="M478,130 H502 M478,142 H502"/>
+  <line class="w" x1="490" y1="142" x2="490" y2="186"/><path class="w" d="M476,186 H504 M481,192 H499 M486,198 H494"/>
+  <text class="k" x="508" y="141">10 pF</text>
+  <!-- clamp -->
+  <circle class="dot" cx="570" cy="84" r="3.5"/><line class="w" x1="570" y1="84" x2="570" y2="150"/>
+  <rect class="s" x="536" y="150" width="68" height="30" rx="3"/><text x="570" y="170" text-anchor="middle">Clamp</text>
+  <!-- comparator -->
+  <path class="b" d="M660,52 L660,164 L770,108 Z" style="fill:#fff;stroke:var(--ink);stroke-width:1.4"/>
+  <polyline class="wa" points="600,84 660,84"/><text class="t" x="668" y="90">−</text><text class="t" x="668" y="138">+</text>
+  <polyline class="wa" points="770,108 880,108" marker-end="url(#bd-b)"/><text class="t" x="892" y="113">To the FPGA</text>
+  <!-- threshold and hysteresis -->
+  <text class="t" x="546" y="217" text-anchor="end">Pod threshold</text>
+  <line class="w" x1="552" y1="212" x2="566" y2="212"/>
+  <rect class="b" x="566" y="198" width="58" height="28" rx="2"/><text class="k" x="595" y="244" text-anchor="middle">1 kΩ</text>
+  <polyline class="w" points="624,212 700,212"/>
+  <circle class="dot" cx="640" cy="212" r="3.5"/><polyline class="w" points="640,212 640,132 660,132"/>
+  <rect class="b" x="700" y="198" width="70" height="28" rx="2"/><text class="k" x="735" y="244" text-anchor="middle">330 kΩ</text>
+  <polyline class="w" points="770,212 820,212 820,108"/><circle class="dot" cx="820" cy="108" r="3.5"/>
+</svg>
+<figcaption><b>Figure 7.</b> One input channel, simplified. The 330&nbsp;kΩ from the comparator's output to its + input gives the hysteresis.</figcaption>
+</figure>
+<p>Every channel is the same circuit. An ESD diode at the connector is rated for discharges of ±8&nbsp;kV. A compensated divider of 866&nbsp;kΩ and 215&nbsp;kΩ scales the signal by 5 and sets the 1&nbsp;MΩ load. A clamp holds the divided signal in range when the input is far above the logic level or below ground, which is how an input is designed to stand ±25&nbsp;V for as long as you like, with the board powered or not. A fast comparator then compares the signal with the pod's threshold. Feedback around the comparator gives the hysteresis: once an input has crossed the threshold it must come back by 25 to 100&nbsp;mV to switch again, so a slow or noisy edge is recorded once.</p>
+
+<div class="two even">
+  <div>
+    <h3>Loading</h3>
+    <p>Each input looks like 1&nbsp;MΩ in parallel with about 9&nbsp;pF to ground, at the pod connector. A cable and its leads add their own capacitance. On a line with a weak pull-up the extra capacitance slows the rising edge a little: 10&nbsp;pF on a 10&nbsp;kΩ pull-up adds 0.1&nbsp;µs to its time constant.</p>
+    <h3>Grounds</h3>
+    <p>Every signal pin has a ground pin beside it. Connect at least one ground lead per pod, close to the signals, and more for fast signals: a long ground return adds ringing that the analyzer then records.</p>
+  </div>
+  <div>
+    <h3>Slow edges beside busy channels</h3>
+    <p>The signal pins of a pod stand side by side in the connector, so a little of each channel's edges couples into its neighbours. Normally that is far below the hysteresis. One case can show extra edges: a line that is only pulled up weakly and has little capacitance of its own, about 20&nbsp;pF or less, such as a short line on a microcontroller's internal pull-up, next to channels switching fast at 5&nbsp;V. As it crosses the threshold slowly it can be recorded as a burst of edges.</p>
+    <ul>
+      <li>Put such a line on a channel whose neighbours are quiet, or leave the channels beside it unused.</li>
+      <li>Or set that channel's glitch filter to 25&nbsp;ns or more.</li>
+    </ul>
+    <p>An ordinary I²C bus has enough capacitance that it is not affected.</p>
+    <h3>Use</h3>
+    <ul>
+      <li>Indoors and dry, at 0 to 40&nbsp;°C.</li>
+      <li>Handle it like any development board. The inputs are protected; the rest of the board is open electronics.</li>
+      <li>Not for safety-critical or medical use.</li>
+      <li>Revision C is a prototype. It has not been tested for FCC or CE compliance.</li>
+    </ul>
+  </div>
+</div>
+</section>
+
+<!-- ============================== 10 DIMENSIONS ============================== -->
+<section class="newpage">
+<h2 id="s10"><span class="n">10</span> Dimensions</h2>
+<p>In millimetres. Positions are measured from the <b>top left corner of the board seen from the component side</b>, with the 40-pin header at the top: x to the right and y down.</p>
+<figure>
+<svg class="dm" viewBox="0 0 1060 640" role="img" aria-labelledby="dm-title dm-desc">
+<title id="dm-title">Logic Boole 16 dimensions</title>
+<desc id="dm-desc">Top view of the 82 by 86 mm board with its four mounting holes on a 58 by 49 mm pattern and the positions of its connectors, and a side view of the stack on a Raspberry Pi: 16 mm between the Pi and the board, a 1.6 mm board, header pins 8.2 mm above it and pod connectors about 11 mm above it.</desc>
+<defs><marker id="dm-a" viewBox="0 0 10 10" refX="9.2" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,1.6 L10,5 L0,8.4 Z" class="dm-ah"/></marker></defs>
+<text class="dm-h" x="40" y="20">Top view, component side</text>
+<rect class="dm-pi" x="235" y="112" width="425" height="280" rx="15"/>
+<text class="dm-l" x="570" y="410">Raspberry Pi 4 or 5</text>
+<text class="dm-l" x="570" y="425">underneath</text>
+<path class="dm-o" d="M160,112 H550 A10,10 0 0 1 560,122 V298.5 H558.4 A2.5,2.5 0 0 0 555.9,301 V363 A2.5,2.5 0 0 0 558.4,365.5 H560 V532 A10,10 0 0 1 550,542 H160 A10,10 0 0 1 150,532 V122 A10,10 0 0 1 160,112 Z"/>
+<rect class="dm-c" x="270.2" y="116.5" width="254.5" height="25.9"/>
+<text class="dm-n" x="397.5" y="159.4" text-anchor="middle">40-pin header</text>
+<rect class="dm-c" x="507.2" y="308.8" width="52.7" height="46.5"/>
+<text class="dm-n" x="501.2" y="337" text-anchor="end">USB-C</text>
+<rect class="dm-c" x="182.9" y="471" width="140.4" height="68.5"/>
+<text class="dm-n" x="253.1" y="510.2" text-anchor="middle">POD A</text>
+<rect class="dm-c" x="371.4" y="471" width="140.4" height="68.5"/>
+<text class="dm-n" x="441.6" y="510.2" text-anchor="middle">POD B</text>
+<rect class="dm-c" x="328" y="487.2" width="38.6" height="52.3"/>
+<text class="dm-n" x="347.3" y="480.2" text-anchor="middle">TRIG</text>
+<rect class="dm-c" x="299.8" y="196.8" width="100.5" height="100.5"/>
+<text class="dm-n" x="350" y="252" text-anchor="middle">FPGA</text>
+<rect class="dm-c" x="459.8" y="186.8" width="50.5" height="50.5"/>
+<text class="dm-n" x="485" y="217" text-anchor="middle">FX3</text>
+<rect class="dm-p1" x="272.4" y="131.3" width="9" height="9"/>
+<polyline class="dm-e" points="276.9,141.8 276.9,189.5 286.9,189.5"/>
+<text class="dm-l" x="290.9" y="193.5">pin 1</text>
+<rect class="dm-c" x="155.2" y="518" width="4.5" height="8"/>
+<rect class="dm-c" x="163.8" y="518" width="4.5" height="8"/>
+<rect class="dm-c" x="172.2" y="518" width="4.5" height="8"/>
+<text class="dm-l" x="155" y="504">LEDs</text>
+<circle class="dm-hole" cx="252.5" cy="129.5" r="6.8"/>
+<path class="dm-x" d="M239.5,129.5 H265.5 M252.5,116.5 V142.5"/>
+<circle class="dm-hole" cx="542.5" cy="129.5" r="6.8"/>
+<path class="dm-x" d="M529.5,129.5 H555.5 M542.5,116.5 V142.5"/>
+<circle class="dm-hole" cx="252.5" cy="374.5" r="6.8"/>
+<path class="dm-x" d="M239.5,374.5 H265.5 M252.5,361.5 V387.5"/>
+<circle class="dm-hole" cx="542.5" cy="374.5" r="6.8"/>
+<path class="dm-x" d="M529.5,374.5 H555.5 M542.5,361.5 V387.5"/>
+<polyline class="dm-e" points="257.5,379.5 268.5,396.5 276.5,396.5"/>
+<text class="dm-l" x="280.5" y="400.5">4 × ⌀2.7, for M2.5</text>
+<line class="dm-e" x1="150" y1="112" x2="150" y2="45"/>
+<line class="dm-e" x1="560" y1="112" x2="560" y2="45"/>
+<line class="dm-d" x1="150" y1="50" x2="560" y2="50" marker-start="url(#dm-a)" marker-end="url(#dm-a)"/>
+<text class="dm-t" x="355" y="45" text-anchor="middle">82.0</text>
+<line class="dm-e" x1="150" y1="112" x2="150" y2="75"/>
+<line class="dm-e" x1="252.5" y1="112" x2="252.5" y2="75"/>
+<line class="dm-d" x1="150" y1="80" x2="252.5" y2="80" marker-start="url(#dm-a)" marker-end="url(#dm-a)"/>
+<text class="dm-t" x="201.2" y="75" text-anchor="middle">20.5</text>
+<line class="dm-e" x1="252.5" y1="129.5" x2="252.5" y2="75"/>
+<line class="dm-e" x1="542.5" y1="129.5" x2="542.5" y2="75"/>
+<line class="dm-d" x1="252.5" y1="80" x2="542.5" y2="80" marker-start="url(#dm-a)" marker-end="url(#dm-a)"/>
+<text class="dm-t" x="397.5" y="75" text-anchor="middle">58.0</text>
+<line class="dm-e" x1="150" y1="112" x2="45" y2="112"/>
+<line class="dm-e" x1="150" y1="542" x2="45" y2="542"/>
+<line class="dm-d" x1="50" y1="112" x2="50" y2="542" marker-start="url(#dm-a)" marker-end="url(#dm-a)"/>
+<text class="dm-t" x="44" y="327" text-anchor="middle" transform="rotate(-90 44 327)">86.0</text>
+<line class="dm-e" x1="150" y1="112" x2="101" y2="112"/>
+<line class="dm-e" x1="150" y1="129.5" x2="101" y2="129.5"/>
+<line class="dm-d" x1="106" y1="112" x2="106" y2="129.5" marker-start="url(#dm-a)" marker-end="url(#dm-a)"/>
+<text class="dm-t" x="99" y="125.8" text-anchor="end">3.5</text>
+<line class="dm-e" x1="252.5" y1="129.5" x2="101" y2="129.5"/>
+<line class="dm-e" x1="252.5" y1="374.5" x2="101" y2="374.5"/>
+<line class="dm-d" x1="106" y1="129.5" x2="106" y2="374.5" marker-start="url(#dm-a)" marker-end="url(#dm-a)"/>
+<text class="dm-t" x="100" y="252" text-anchor="middle" transform="rotate(-90 100 252)">49.0</text>
+<line class="dm-e" x1="150" y1="542" x2="150" y2="577"/>
+<line class="dm-e" x1="253.1" y1="542" x2="253.1" y2="577"/>
+<line class="dm-d" x1="150" y1="572" x2="253.1" y2="572" marker-start="url(#dm-a)" marker-end="url(#dm-a)"/>
+<text class="dm-t" x="201.6" y="567" text-anchor="middle">20.6</text>
+<path class="dm-x" d="M253.1,520 V546"/>
+<line class="dm-e" x1="150" y1="542" x2="150" y2="602"/>
+<line class="dm-e" x1="347.4" y1="542" x2="347.4" y2="602"/>
+<line class="dm-d" x1="150" y1="597" x2="347.4" y2="597" marker-start="url(#dm-a)" marker-end="url(#dm-a)"/>
+<text class="dm-t" x="248.7" y="592" text-anchor="middle">39.5</text>
+<path class="dm-x" d="M347.4,520 V546"/>
+<line class="dm-e" x1="150" y1="542" x2="150" y2="627"/>
+<line class="dm-e" x1="441.6" y1="542" x2="441.6" y2="627"/>
+<line class="dm-d" x1="150" y1="622" x2="441.6" y2="622" marker-start="url(#dm-a)" marker-end="url(#dm-a)"/>
+<text class="dm-t" x="295.8" y="617" text-anchor="middle">58.3</text>
+<path class="dm-x" d="M441.6,520 V546"/>
+<text class="dm-l" x="450" y="627">to the centre of each connector</text>
+<line class="dm-e" x1="560" y1="112" x2="689" y2="112"/>
+<line class="dm-e" x1="560" y1="332" x2="689" y2="332"/>
+<line class="dm-d" x1="684" y1="112" x2="684" y2="332" marker-start="url(#dm-a)" marker-end="url(#dm-a)"/>
+<text class="dm-t" x="700" y="222" text-anchor="middle" transform="rotate(-90 700 222)">44.0</text>
+<path class="dm-x" d="M513,332 H568"/>
+<text class="dm-h" x="748" y="162">Stack on a Raspberry Pi</text>
+<text class="dm-l" x="748" y="179">heights to scale, widths not</text>
+<rect class="dm-pi2" x="778" y="440.8" width="222" height="11.2"/>
+<text class="dm-l" x="780" y="469">Raspberry Pi</text>
+<rect class="dm-c" x="938" y="420.8" width="32" height="20"/>
+<rect class="dm-c2" x="938" y="312.8" width="32" height="108"/>
+<line class="dm-pin" x1="947" y1="300" x2="947" y2="234.4"/>
+<line class="dm-pin" x1="961" y1="300" x2="961" y2="234.4"/>
+<text class="dm-l" x="954" y="469" text-anchor="middle">stacking header</text>
+<text class="dm-l" x="954" y="227.4" text-anchor="middle">pins</text>
+<rect class="dm-c" x="876" y="312.8" width="22" height="128"/>
+<text class="dm-l" x="870" y="380.8" text-anchor="end">spacer</text>
+<rect class="dm-o2" x="778" y="300" width="222" height="12.8"/>
+<rect class="dm-c" x="786" y="212" width="84" height="88"/>
+<text class="dm-n" x="828" y="261" text-anchor="middle">POD</text>
+<text class="dm-l" x="772" y="325.8" text-anchor="end">board 1.6</text>
+<line class="dm-e" x1="786" y1="212" x2="749" y2="212"/>
+<line class="dm-e" x1="786" y1="300" x2="749" y2="300"/>
+<line class="dm-d" x1="754" y1="212" x2="754" y2="300" marker-start="url(#dm-a)" marker-end="url(#dm-a)"/>
+<text class="dm-t" x="748" y="256" text-anchor="middle" transform="rotate(-90 748 256)">≈ 11</text>
+<line class="dm-e" x1="961" y1="234.4" x2="1029" y2="234.4"/>
+<line class="dm-e" x1="961" y1="300" x2="1029" y2="300"/>
+<line class="dm-d" x1="1024" y1="234.4" x2="1024" y2="300" marker-start="url(#dm-a)" marker-end="url(#dm-a)"/>
+<text class="dm-t" x="1040" y="267.2" text-anchor="middle" transform="rotate(-90 1040 267.2)">8.2</text>
+<line class="dm-e" x1="1000" y1="312.8" x2="1029" y2="312.8"/>
+<line class="dm-e" x1="1000" y1="440.8" x2="1029" y2="440.8"/>
+<line class="dm-d" x1="1024" y1="312.8" x2="1024" y2="440.8" marker-start="url(#dm-a)" marker-end="url(#dm-a)"/>
+<text class="dm-t" x="1040" y="376.8" text-anchor="middle" transform="rotate(-90 1040 376.8)">16.0</text>
+</svg>
+<figcaption><b>Figure 8.</b> Board outline, mounting holes and connectors, and the stack on a Raspberry Pi. The dashed outline is the Pi underneath.</figcaption>
+</figure>
+<table>
+  <thead><tr><th style="width:26%">Feature</th><th class="v" style="width:13%">X</th><th class="v" style="width:13%">Y</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td class="p">Board</td><td class="v">82.0</td><td class="v">86.0</td><td>Overall size. 2 mm corner radius, 1.6 mm thick</td></tr>
+    <tr><td class="p">Mounting holes</td><td class="v">20.5, 78.5</td><td class="v">3.5, 52.5</td><td>Four holes of 2.7 mm for M2.5, 58.0 × 49.0 mm apart</td></tr>
+    <tr><td class="p">40-pin header, pin 1</td><td class="v">25.37</td><td class="v">4.77</td><td>2 × 20 at 2.54 mm. The header's centre is at 49.5, 3.5</td></tr>
+    <tr><td class="p">USB-C, centre</td><td class="v">right edge</td><td class="v">44.0</td><td>The plug goes in from the right. The receptacle's face is 0.8 mm out from a notch in the edge</td></tr>
+    <tr><td class="p">Pod A, centre</td><td class="v">20.62</td><td class="v">front edge</td><td>The connector's body is 28.1 mm wide. Its face is 0.5 mm inside the edge</td></tr>
+    <tr><td class="p">Trigger header, centre</td><td class="v">39.47</td><td class="v">front edge</td><td>Pin 1, trigger in, is the right-hand pin</td></tr>
+    <tr><td class="p">Pod B, centre</td><td class="v">58.31</td><td class="v">front edge</td><td>As pod A</td></tr>
+    <tr><td class="p">Above the board</td><td class="v"></td><td class="v"></td><td>Pod connectors about 11 mm. The 40-pin header's pins 8.2 mm</td></tr>
+    <tr><td class="p">Below the board</td><td class="v"></td><td class="v"></td><td>The stacking header's body, 13.5 mm. Nothing else</td></tr>
+    <tr><td class="p">On a Raspberry Pi</td><td class="v"></td><td class="v"></td><td>16.0 mm from the top of the Pi's board to the underside of this one, on M2.5 × 16 mm spacers. The board reaches 17 mm past the Pi's microSD end and 30 mm past its HDMI edge, and stops 20 mm short of its USB and Ethernet end</td></tr>
+  </tbody>
+</table>
+</section>
+
+<!-- ============================== 11 FIRMWARE AND SOFTWARE ============================== -->
+<section class="newpage">
+<h2 id="s11"><span class="n">11</span> Firmware and software</h2>
+<p>The board keeps no firmware of its own, so there is nothing to program before you use it. You only need the pads in this section for development.</p>
+<div class="two even">
+  <div>
+    <h3>Loaded by the host</h3>
+    <p>Each time the board connects, the host software loads the FX3's firmware over USB, and the FX3 then configures the FPGA, which takes 0.7&nbsp;s. An update is a new file on the host, and nothing you load can leave the board unusable: unplug it and plug it in again.</p>
+    <p>Thresholds, triggers, glitch filters and everything else the FPGA controls are set over the same USB link.</p>
+    <p>The firmware image is not in the repository. The software downloads it once, about 110&nbsp;kB, checks it and keeps it, so the host needs the internet that one time.</p>
+    <p>On USB the board has the IDs of Infineon's SDK examples, <span class="mono">04B4:00F1</span>, the name Logic Boole 16 and a serial number of its own.</p>
+    <p>A footprint for an SPI flash, not fitted, would let the FX3 start on its own.</p>
+    <table class="kv" style="margin-top:3mm">
+      <tbody>
+        <tr><td>macOS</td><td>Runs: the current software was tested from a Mac laptop</td></tr>
+        <tr><td>Raspberry Pi OS</td><td>An earlier version ran on a Pi 5 (64-bit). The current one has not been run there yet</td></tr>
+        <tr><td>Linux on a PC</td><td>Written for it. Not run yet</td></tr>
+        <tr><td>Windows</td><td>Not supported</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div>
+    <h3>Host software</h3>
+    <p>One Python package that needs Python 3.9 or later and libusb, and nothing else. It runs from its folder: nothing is built or installed.</p>
+    <ul>
+      <li><b>The app</b>: <code>./logicboole</code> opens it in a browser, with the waveforms, each pod's threshold, the trigger and the decoders.</li>
+      <li><b>The command line</b>: <code>check</code>, <code>capture</code>, <code>decode</code>, <code>measure</code>, <code>selftest</code> and more, with JSON output for scripts.</li>
+      <li><b>A Python package</b>: <code>import logicboole</code>.</li>
+      <li><b>Files</b>: <code>.sr</code> for PulseView and sigrok-cli, <code>.vcd</code>, <code>.csv</code>, and its own <code>.lb16</code>.</li>
+      <li><b>Decoders</b>: sigrok's, more than a hundred, through <code>sigrok-cli</code> if it is installed.</li>
+      <li><b>For AI agents</b>: <code>./logicboole mcp</code>, a Model Context Protocol server, and a skill file.</li>
+      <li><b>With no board</b>: <code>--fake</code> runs all of it on a stand-in.</li>
+    </ul>
+    <p><code>./logicboole selftest</code> checks the whole path from the FPGA to the host: 34 captures of a test pattern, with every word compared.</p>
+  </div>
+</div>
+<h3>Programming and debug pads</h3>
+<p>Nothing is fitted. Both JTAG ports are Tag-Connect TC2050 pad patterns for the cable with locking legs (TC2050-IDC), at 3.3&nbsp;V.</p>
+<table>
+  <thead><tr><th style="width:13%">Marked</th><th style="width:21%">Where</th><th style="width:25%">For</th><th>Pins 1 to 10</th></tr></thead>
+  <tbody>
+    <tr><td class="p">FPGA JTAG</td><td>Left of the FPGA</td><td>The FPGA, in Tag-Connect's Xilinx order</td><td class="sig" style="white-space:normal">3V3, TMS, GND, TCK, GND, TDO, GND, TDI, GND, not connected</td></tr>
+    <tr><td class="p">FX3 JTAG</td><td>Right edge, towards the front</td><td>The FX3, in ARM's 10-pin order. JTAG only, no SWD</td><td class="sig" style="white-space:normal">3V3, TMS, GND, TCK, GND, TDO, key, TDI, GND, RESET</td></tr>
+    <tr><td class="p">FX3 UART</td><td>Front right corner</td><td>The FX3's serial port: 3 holes at 2.54 mm, no header fitted</td><td class="sig" style="white-space:normal">GND, RX, TX</td></tr>
+  </tbody>
+</table>
+
+</section>
+
+<!-- ============================== 12 OPEN SOURCE ============================== -->
+<section class="newpage">
+<h2 id="s12"><span class="n">12</span> Open source</h2>
+<p>Logic Boole 16 is open hardware with open software. Everything needed to study the board, to change it and to have it made is in one repository: <b>github.com/mgwalkerjr95/logic-boole-16</b>.</p>
+<table>
+  <thead><tr><th style="width:19%">Part</th><th>What is published</th><th style="width:14%">Folder</th><th style="width:19%">License</th></tr></thead>
+  <tbody>
+    <tr><td class="p">The board</td><td>The KiCad 10 project, the schematic as a PDF, the parts list, the Gerber files and placement files that revision C was made from, a 3D model</td><td class="mono">hardware/</td><td>CERN-OHL-S v2</td></tr>
+    <tr><td class="p">The FPGA design</td><td>The Verilog source, a test bench that checks itself, the build script, and the bitstream the software loads</td><td class="mono">gateware/</td><td>CERN-OHL-S v2</td></tr>
+    <tr><td class="p">The firmware</td><td>The FX3's firmware in C</td><td class="mono">firmware/</td><td>MIT</td></tr>
+    <tr><td class="p">The host software</td><td>The app, the command line, the Python package, the server and the skill file for AI agents, with their tests</td><td class="mono">software/</td><td>GPL-3.0-or-later</td></tr>
+    <tr><td class="p">The documents</td><td>This datasheet and its source, the quick start guide, the USB requests, the FPGA's registers and the format of the sample stream</td><td class="mono">docs/</td><td>CERN-OHL-S v2</td></tr>
+  </tbody>
+</table>
+<div class="two even">
+  <div>
+    <h3>What you may do</h3>
+    <p>Under the CERN-OHL-S v2 you may use, study, change and share the design, and make and sell boards from it. Whoever passes on the design, or boards made from it, changed or not, passes on the complete source under the same license and keeps its notices. The host software is under the GNU General Public License, version 3 or later, on the same principle. The firmware's source is under the MIT license.</p>
+    <p>These lines are a summary. The licenses' own texts decide: <code>LICENSE</code>, <code>software/LICENSE</code> and <code>firmware/LICENSE</code> in the repository. The design is distributed without any express or implied warranty, including of merchantability, satisfactory quality and fitness for a particular purpose.</p>
+    <h3>Changing it</h3>
+    <p><code>./logicboole load --gateware FILE.bin --firmware FILE.img</code> runs your own build on the board, and <code>./logicboole selftest</code> then checks it. The software is plain Python and JavaScript with no build step. JTAG pads for both chips are on the board (section 11), and the Pi bus jumpers bring nine of the Pi's pins to the FPGA. The published design fills 92&nbsp;% of the FPGA's logic, so a large addition has to take something out.</p>
+  </div>
+  <div>
+    <h3>What is not open</h3>
+    <ul>
+      <li><b>Infineon's code in the firmware image.</b> The image is built from the published source with Infineon's EZ-USB FX3 SDK and also holds code of the SDK's libraries, which is Infineon's and stays under the license of its SDK. The image is a file of the repository's releases, for use on a Logic Boole 16. <code>firmware/README.md</code> says how to build it yourself.</li>
+      <li><b>Two of the tools.</b> The FPGA is built with AMD's ISE 14.7, whose free WebPACK license covers it, and the firmware with Infineon's SDK. The simulation needs only Icarus Verilog, which is open.</li>
+      <li><b>The name.</b> Logic Boole and its logo are not part of the licenses.</li>
+    </ul>
+    <h3>Having boards made</h3>
+    <p>The fabrication files are the ones the first boards were made from at JLCPCB: four layers on the stack-up JLC04161H-3313, ENIG, parts on the top side only. The repository's <code>README.md</code> lists the order options, and the stacking header that is soldered by hand afterwards.</p>
+  </div>
+</div>
+</section>
+
+<!-- ============================== 13 STATUS AND KNOWN LIMITS ============================== -->
+<section class="newpage">
+<h2 id="s13"><span class="n">13</span> Status and known limits</h2>
+<p>Revision C is the first build: five boards, of which two have been brought up so far. This is what has been measured on them, and what we know about them. None of it is a safety problem.</p>
+<h3>What has been measured</h3>
+<table>
+  <thead><tr><th style="width:23%">What</th><th style="width:15%">On</th><th>Result</th></tr></thead>
+  <tbody>
+    <tr><td class="p">Supplies and start-up</td><td>Boards 1 and 2</td><td>Every rail right. The firmware and the FPGA load over USB, and the two boards give different serial numbers</td></tr>
+    <tr><td class="p">The path to the host</td><td>Boards 1 and 2</td><td>The self-test passes over USB 3 and over USB 2.0: 34 captures of a test pattern with every word compared, 600 million samples at 200 MS/s among them</td></tr>
+    <tr><td class="p">Sampling</td><td>Board 1</td><td>Clocks of 1 MHz and 100 kHz at 200 MS/s: every half period of the 1 MHz clock is 99 to 101 samples, and the two samples of a cycle are 4.95 to 5.05 ns apart</td></tr>
+    <tr><td class="p">Inputs at speed</td><td>Board 1: all 16. Board 2: 5</td><td>A clock on one input at a time at 50, 70, 80 and 85 MHz: every period seen, the other inputs quiet. At 90 MHz some inputs miss up to 2 % of the periods</td></tr>
+    <tr><td class="p">Thresholds</td><td>Board 1</td><td>The threshold voltage is within 10 mV of its setting, seen from the probe, at 0.30, 1.56 and 3.00 V. All 16 inputs read a 3.3 V pattern right from 0.2 to 3.0 V</td></tr>
+    <tr><td class="p">Skew and 5 V logic</td><td>Board 1</td><td>1.4 ns between the earliest and the latest of the 16 inputs. 5 V logic reads right on four inputs of pod A beside 3.3 V logic on four more</td></tr>
+    <tr><td class="p">Trigger, glitch filter, capture clock</td><td>Board 1, three or four inputs</td><td>In 50 captures the trigger sample was the one a model picked, sample by sample. The capture clock at 10, 25 and 50 MHz gave one sample for each edge. The filter is as in section 2</td></tr>
+    <tr><td class="p">Trigger header</td><td>Board 1</td><td>TRIG OUT in 600 captures and TRIG IN in 2,000, from 100 kHz to 50 MHz</td></tr>
+    <tr><td class="p">USB</td><td>Board 1</td><td>5 Gbit/s with the plug either way up. 384 MB/s in a capture, and 44 MB/s over USB 2.0 for 20 s</td></tr>
+    <tr><td class="p">Current</td><td>Board 1</td><td>0.18 A while streaming, with an earlier test design. Before they are loaded, boards 1 and 2 both draw 0.05 A</td></tr>
+    <tr><td class="p">On a Raspberry Pi 5</td><td>Board 1</td><td>On the header and the spacers, powered from the header and from USB-C: 391 MB/s for 10 minutes with every word right, with an earlier test design</td></tr>
+  </tbody>
+</table>
+<h3>Known limits</h3>
+<table>
+  <thead><tr><th style="width:24%">Limit</th><th style="width:40%">What you see</th><th>What to do</th></tr></thead>
+  <tbody>
+    <tr><td class="p">It needs a host</td><td>On its own the board does nothing: a computer or a Raspberry Pi loads it and holds the capture</td><td>None needed</td></tr>
+    <tr><td class="p">Digital only</td><td>No analog channels and no pattern generator</td><td>Use the trigger output to start a scope</td></tr>
+    <tr><td class="p">200 MS/s needs idle time to stream</td><td>A signal that changes in 100 million samples a second or more overflows: the capture ends after 4.5 ms, whole up to there</td><td>Use the raw format at 100 MS/s, or take the 4.5 ms</td></tr>
+    <tr><td class="p">USB 2.0 carries a ninth as much</td><td>Captures that make more than 11 million words a second overflow</td><td>Use a USB 3 cable and port</td></tr>
+    <tr><td class="p">Signals above 85 MHz</td><td>At 90 MHz some inputs miss pulses</td><td>Keep to 85 MHz, or 6 ns pulses</td></tr>
+    <tr><td class="p">Two comparator types on the first boards</td><td>At 85 MHz pod A reads a high up to 0.4 ns long and pod B up to 0.6 ns short. Pod B's edges come 0.2 to 0.6 ns before pod A's</td><td>Put signals whose timing you compare on one pod</td></tr>
+    <tr><td class="p">Capture clock: data set-up</td><td>Data that changes about 5 ns before the clock's edge is read old in some samples and new in others</td><td>Have the data steady 15 ns before the edge</td></tr>
+    <tr><td class="p">Thresholds stop at 3 V</td><td>No threshold near the top of a 5 V swing</td><td>Use 2.5 V for 5 V CMOS, or 1.4 V for TTL levels (section 6)</td></tr>
+    <tr><td class="p">A threshold close to a logic level, on pod A</td><td>With the threshold within 8 % of the swing of the low or the high level, an edge that follows a level held for 4 µs or longer is read 0.1 to 0.4 µs late. Pod B does not show it</td><td>Set the threshold near the middle of the swing</td></tr>
+    <tr><td class="p">Slow edges beside busy channels</td><td>A weakly pulled-up line next to channels switching fast at 5 V can record extra edges. From simulation</td><td>Quiet neighbours, or a glitch filter of 25 ns or more (section 9)</td></tr>
+    <tr><td class="p">The first load needs the internet</td><td>The software downloads the firmware image once</td><td>Or put the file in place by hand: <code>software/README.md</code></td></tr>
+    <tr><td class="p">A Mac laptop asks first</td><td>macOS asks whether to allow the accessory when a board's firmware first starts there</td><td>Choose Allow, and run the command again if it had stopped waiting</td></tr>
+    <tr><td class="p">No Windows</td><td>The software does not run on Windows</td><td>macOS or Linux</td></tr>
+    <tr><td class="p">Pi 4: a slim USB-C plug</td><td>The link cable's plug sits over the Pi 4's USB sockets</td><td>Use a plug body no thicker than 6.4 mm (section 7)</td></tr>
+  </tbody>
+</table>
+<div class="two even">
+  <div>
+    <h3>Not yet measured or tested</h3>
+    <ul>
+      <li>Hysteresis, input resistance and capacitance, and the threshold against a known input voltage.</li>
+      <li>±25&nbsp;V on the inputs, and electrostatic discharge.</li>
+      <li>Capture of the Pi's bus lines (section 5): in the FPGA design and simulated, not yet run on a board.</li>
+      <li>Logic below 3.3&nbsp;V, and 5&nbsp;V logic on pod B.</li>
+      <li>Three of the five boards. On board 2: 11 inputs at speed, and the trigger header.</li>
+      <li>The current software on Linux: a PC, a Raspberry Pi 5, a Pi 4.</li>
+      <li>A capture of hours, the current at 200&nbsp;MS/s, other temperatures, and the weight.</li>
+    </ul>
+  </div>
+  <div>
+    <h3>Still to be decided</h3>
+    <ul>
+      <li>The probe lead set.</li>
+      <li>Whether a USB cable goes in the box.</li>
+      <li>Which of the two comparators later boards carry on both pods.</li>
+    </ul>
+  </div>
+</div>
+</section>
+
+<!-- ============================== 14 REVISIONS AND DOCUMENTS ============================== -->
+<section>
+<h2 id="s14"><span class="n">14</span> Revisions and documents</h2>
+<h3>How it works</h3>
+<figure class="bd">
+<svg viewBox="0 0 1000 366" role="img" aria-labelledby="bd-t bd-d">
+  <title id="bd-t">Block diagram</title>
+  <desc id="bd-d">Each pod's eight inputs pass through protection and a 5 to 1 divider to eight comparators, which compare them with the pod's threshold and feed the FPGA. The FPGA samples, triggers and buffers, and sends the samples over a 32-bit bus to the FX3 USB 3 controller and the USB-C connector. Trigger in and out, a 24 MHz oscillator and the status LEDs connect to the FPGA. Power comes from USB-C or the Pi's 5 V pins.</desc>
+  <defs>
+    <marker id="bd-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="ah" d="M0,1.5 L10,5 L0,8.5 Z"/></marker>
+    <marker id="bd-b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="aha" d="M0,1.5 L10,5 L0,8.5 Z"/></marker>
+  </defs>
+  <!-- pod A row -->
+  <rect class="a" x="10" y="26" width="130" height="64" rx="5"/><text class="t" x="75" y="54" text-anchor="middle">POD A</text><text class="m" x="75" y="73" text-anchor="middle">A0–A7</text>
+  <rect class="b" x="186" y="26" width="196" height="64" rx="5"/><text class="t" x="284" y="54" text-anchor="middle">Protection and divider</text><text class="m" x="284" y="73" text-anchor="middle">ESD diode, 5:1, clamp</text>
+  <rect class="b" x="428" y="26" width="170" height="64" rx="5"/><text class="t" x="513" y="54" text-anchor="middle">8 comparators</text><text class="m" x="513" y="73" text-anchor="middle">with hysteresis</text>
+  <rect class="s" x="428" y="104" width="170" height="34" rx="5"/><text x="513" y="126" text-anchor="middle">Threshold A, 0.3–3 V</text>
+  <line class="wa" x1="140" y1="58" x2="184" y2="58" marker-end="url(#bd-b)"/>
+  <line class="wa" x1="382" y1="58" x2="426" y2="58" marker-end="url(#bd-b)"/>
+  <line class="wa" x1="598" y1="58" x2="664" y2="58" marker-end="url(#bd-b)"/>
+  <line class="w" x1="666" y1="121" x2="600" y2="121" marker-end="url(#bd-a)"/>
+  <!-- pod B row -->
+  <rect class="a" x="10" y="166" width="130" height="64" rx="5"/><text class="t" x="75" y="194" text-anchor="middle">POD B</text><text class="m" x="75" y="213" text-anchor="middle">B0–B7</text>
+  <rect class="b" x="186" y="166" width="196" height="64" rx="5"/><text class="t" x="284" y="194" text-anchor="middle">Protection and divider</text><text class="m" x="284" y="213" text-anchor="middle">ESD diode, 5:1, clamp</text>
+  <rect class="b" x="428" y="166" width="170" height="64" rx="5"/><text class="t" x="513" y="194" text-anchor="middle">8 comparators</text><text class="m" x="513" y="213" text-anchor="middle">with hysteresis</text>
+  <rect class="s" x="428" y="244" width="170" height="34" rx="5"/><text x="513" y="266" text-anchor="middle">Threshold B, 0.3–3 V</text>
+  <line class="wa" x1="140" y1="198" x2="184" y2="198" marker-end="url(#bd-b)"/>
+  <line class="wa" x1="382" y1="198" x2="426" y2="198" marker-end="url(#bd-b)"/>
+  <line class="wa" x1="598" y1="198" x2="664" y2="198" marker-end="url(#bd-b)"/>
+  <line class="w" x1="666" y1="261" x2="600" y2="261" marker-end="url(#bd-a)"/>
+  <!-- FPGA, FX3, USB -->
+  <rect class="b" x="666" y="26" width="136" height="252" rx="5"/>
+  <text class="t" x="734" y="120" text-anchor="middle">FPGA</text><text class="m" x="734" y="140" text-anchor="middle">Spartan-6</text>
+  <text class="m" x="734" y="166" text-anchor="middle">samples at</text><text class="m" x="734" y="183" text-anchor="middle">200 MS/s,</text><text class="m" x="734" y="200" text-anchor="middle">triggers,</text><text class="m" x="734" y="217" text-anchor="middle">filters, buffer</text>
+  <rect class="b" x="870" y="26" width="120" height="112" rx="5"/><text class="t" x="930" y="72" text-anchor="middle">FX3</text><text class="m" x="930" y="92" text-anchor="middle">USB 3</text><text class="m" x="930" y="109" text-anchor="middle">controller</text>
+  <line class="w" x1="804" y1="82" x2="868" y2="82" marker-start="url(#bd-a)" marker-end="url(#bd-a)"/>
+  <text class="m" x="836" y="50" text-anchor="middle">32-bit</text><text class="m" x="836" y="66" text-anchor="middle">bus</text>
+  <rect class="a" x="870" y="190" width="120" height="88" rx="5"/><text class="t" x="930" y="226" text-anchor="middle">USB-C</text><text class="m" x="930" y="246" text-anchor="middle">data and 5 V</text>
+  <line class="w" x1="930" y1="140" x2="930" y2="188" marker-start="url(#bd-a)" marker-end="url(#bd-a)"/>
+  <!-- bottom row -->
+  <rect class="s" x="10" y="318" width="372" height="40" rx="5"/><text x="196" y="343" text-anchor="middle">Power: 5 V from USB-C or the Pi, to 3.3, 1.8 and 1.2 V</text>
+  <rect class="s" x="400" y="318" width="210" height="40" rx="5"/><text x="505" y="343" text-anchor="middle">40-pin header: ID EEPROM</text>
+  <rect class="a" x="628" y="318" width="112" height="40" rx="5"/><text x="684" y="343" text-anchor="middle">TRIG in, out</text>
+  <rect class="s" x="754" y="318" width="110" height="40" rx="5"/><text x="809" y="343" text-anchor="middle">24 MHz clock</text>
+  <rect class="s" x="878" y="318" width="112" height="40" rx="5"/><text x="934" y="343" text-anchor="middle">3 LEDs</text>
+  <line class="w" x1="700" y1="316" x2="700" y2="280" marker-start="url(#bd-a)" marker-end="url(#bd-a)"/>
+  <line class="w" x1="780" y1="316" x2="780" y2="280" marker-end="url(#bd-a)"/>
+  <polyline class="w" points="796,280 796,300 934,300 934,316" marker-end="url(#bd-a)"/>
+</svg>
+<figcaption><b>Figure 9.</b> Signal path. Blue marks the connectors and the path of the signals you probe.</figcaption>
+</figure>
+<div class="two even">
+  <div>
+    <p><b>Inputs.</b> Sixteen identical channels: an ESD diode, a 5:1 divider, a clamp and a fast comparator with hysteresis. There is no buffer or level shifter in the path. Section 9 has the circuit (figure 6).</p>
+    <p><b>Thresholds.</b> Each pod has its own threshold, made from a 2.5&nbsp;V reference under the FPGA's control and set from the host. Two pods with two thresholds let one capture mix two logic levels.</p>
+  </div>
+  <div>
+    <p><b>Sampling and the link.</b> The FPGA samples all 16 comparator outputs at up to 200&nbsp;MS/s, runs the glitch filters and the trigger on every sample, and passes the samples through a buffer of 8192 words to an Infineon FX3, which carries them to the host over USB&nbsp;3.</p>
+  </div>
+</div>
+
+<div class="two even">
+  <div>
+    <h3>Board revisions</h3>
+    <table>
+      <thead><tr><th style="width:20%">Revision</th><th style="width:30%">Date</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td class="p">C</td><td>November 2026</td><td>The first build, five boards, ordered in October 2026. This datasheet. "Logic Boole 16" and the revision are printed on the back</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div>
+    <h3>Datasheet revisions</h3>
+    <table>
+      <thead><tr><th style="width:18%">Version</th><th style="width:26%">Date</th><th>Changes</th></tr></thead>
+      <tbody>
+        <tr><td class="p">A</td><td>2026-11-13</td><td>First issue, for board revision C. Preliminary</td></tr>
+        <tr><td class="p">B</td><td>2026-11-17</td><td>Figures measured on the first boards in place of design figures. Capture, triggers, glitch filter and capture clock as built: revision A's burst buffer is not built and is gone; capture of the Pi's bus lines is in the FPGA design, in place of pod channels, and has not yet run on a board. The software, and the open-source release (section 12)</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<h3>Main parts</h3>
+<table>
+  <thead><tr><th style="width:30%">Part</th><th style="width:20%">Maker</th><th>Number</th><th style="width:16%">LCSC</th></tr></thead>
+  <tbody>
+    <tr><td class="p">FPGA, Spartan-6</td><td>AMD</td><td class="mono">XC6SLX9-2TQG144C</td><td class="mono">C27408</td></tr>
+    <tr><td class="p">USB 3 controller, EZ-USB FX3</td><td>Infineon</td><td class="mono">CYUSB3014-BZXI</td><td class="mono">C57294</td></tr>
+    <tr><td class="p">Comparators, dual, 8 a board</td><td>Texas Instruments, Maxinmicro</td><td class="mono">TLV3502AIDR, MX3502S</td><td class="mono">C131165, C19269867</td></tr>
+    <tr><td class="p">Input ESD diodes</td><td>Texas Instruments</td><td class="mono">ESD701DPYR</td><td class="mono">C42409125</td></tr>
+    <tr><td class="p">Input clamp diodes</td><td>Nexperia</td><td class="mono">BAV199</td><td class="mono">C40919</td></tr>
+    <tr><td class="p">Threshold reference, 2.5 V</td><td>Texas Instruments</td><td class="mono">TL431BIDBZR</td><td class="mono">C41283</td></tr>
+    <tr><td class="p">USB-C plug-orientation switch</td><td>Texas Instruments</td><td class="mono">HD3SS3212IRKSR</td><td class="mono">C544517</td></tr>
+    <tr><td class="p">Oscillator, 24 MHz</td><td>YXC</td><td class="mono">OT2EL4C4JI-111OLP-24M</td><td class="mono">C5203548</td></tr>
+    <tr><td class="p">3.3 V and 1.2 V regulators</td><td>Texas Instruments</td><td class="mono">TPS62A02PDDCR</td><td class="mono">C22445521</td></tr>
+    <tr><td class="p">1.8 V regulator</td><td>Diodes Inc.</td><td class="mono">AP2112K-1.8TRG1</td><td class="mono">C176944</td></tr>
+    <tr><td class="p">Ideal diodes on the two supplies</td><td>Texas Instruments</td><td class="mono">LM66100DCKR</td><td class="mono">C2869734</td></tr>
+    <tr><td class="p">HAT+ ID EEPROM</td><td>STMicroelectronics</td><td class="mono">M24C64-RMN6TP</td><td class="mono">C79988</td></tr>
+  </tbody>
+</table>
+<p class="small">On the first boards pod A has the MX3502S and pod B the TLV3502AIDR. The two are pin-compatible. The full parts list is <code>hardware/bom.csv</code> in the repository.</p>
+
+<div class="end">Design files, source and the latest revision of this datasheet: <a href="https://github.com/mgwalkerjr95/logic-boole-16">github.com/mgwalkerjr95/logic-boole-16</a>. Product page: <a href="https://logic-boole.vercel.app">logic-boole.vercel.app</a>. Logic Boole 16 · © 2026 Michael Walker. Designed in Texas. This document is licensed under the CERN-OHL-S v2. Preliminary: figures may change. Raspberry Pi is a trademark of Raspberry Pi Ltd. Other names belong to their owners.</div>
+</section>
+
+</body>
+</html>

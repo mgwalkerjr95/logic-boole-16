@@ -8,7 +8,7 @@ It takes the place of usb.py: the same requests get the answers the firmware and
 every 20 ms, or the FPGA's test pattern.  The samples are made one run at a time and coded as the FPGA codes them;
 the code that checks a capture shares nothing with this.  The trigger and the capture clock work as the FPGA's do;
 the TRIG IN pin never changes, and the glitch filter's settings are kept but filter nothing (the stand-in's signals
-have no pulse that short).
+have no pulse that short).  The Raspberry Pi's lines read low, as on a board whose solder jumpers are open.
 
     logicboole --fake            the app with the stand-in
     logicboole --fake capture x.sr
@@ -24,7 +24,7 @@ from . import usb
 
 FRAME, QUARTER = 0.02, 2.5e-6               # seconds: a group of I2C messages this often; a quarter of an SCL period
 FIFO_BITS = 13                              # the FPGA's FIFO holds 2^13 words
-WRITABLE = (set((4, 8, 9, 10, 12, 13, 14, 15, 16, 17, 18, 19, 20, 0x20, 0x21, 0x30, 0x31, 0x32, 0x33))
+WRITABLE = (set((4, 8, 9, 10, 12, 13, 14, 15, 16, 17, 18, 19, 20, 0x20, 0x21, 0x2E, 0x2F, 0x30, 0x31, 0x32, 0x33))
             | set(range(0x38, 0x3C)) | set(range(0x40, 0x90)))
 
 
@@ -229,9 +229,10 @@ class FakeBus:
     def registers(self):
         self.advance()
         r = self.reg
-        r[0:4] = b"\x4C\x42\x16\x04"
+        r[0:4] = b"\x4C\x42\x16\x05"
         r[5] = self._fpga_status()
-        r[6:8] = (3).to_bytes(2, "little")
+        r[0x2F] &= 1
+        r[6:8] = (3 & ~int.from_bytes(r[0x2E:0x30], "little")).to_bytes(2, "little")
         r[0x18:0x1D] = self.taken.to_bytes(5, "little")
         r[0x22:0x24] = (64).to_bytes(2, "little")
         r[0x24:0x2A] = self.sent.to_bytes(6, "little")
@@ -305,6 +306,7 @@ class FakeBus:
             self.rate = B.FASTEST / (int.from_bytes(r[8:11], "little") + 1)
             self.limit = int.from_bytes(r[0x10:0x15], "little")
             self.clock = r[0x30]
+            self.pi = int.from_bytes(r[0x2E:0x30], "little") & 0x1FF
             self.ring = min(int.from_bytes(r[0x32:0x34], "little"), (1 << FIFO_BITS) - 8)
             for k in range(r[0x31] if r[0x31] <= T.STAGES else 0):
                 mask, value, rise, fall, least, most = struct.unpack_from("<HHHHII", r, 0x40 + 16 * k)
@@ -326,12 +328,17 @@ class FakeBus:
             if test:                        # the test pattern is made a run at a time, which is slow: the stand-in
                 due = min(due, self.pos + (200000 << shift))       # falls behind rather than stall
                 return pattern_runs(self.pos, due, shift)
-            return probe_runs(self.pos, due, self.rate)
+            return self._probes(self.pos, due, self.rate)
         return self._clocked(self.fine + (1 << 22) if self.instant else int(elapsed * B.FASTEST), test, shift)
+
+    def _probes(self, first, last, rate):
+        """The probes, with the Pi's lines (all low) where they take a probe's place."""
+        for value, n in probe_runs(first, last, rate):
+            yield value & ~self.pi, n
 
     def _clocked(self, due, test, shift):
         bit = 1 << (self.clock >> 4)
-        for value, n in probe_runs(self.fine, due, B.FASTEST):
+        for value, n in self._probes(self.fine, due, B.FASTEST):
             before, self.fine_last = self.fine_last, value
             self.fine += n
             if before is not None and (before ^ value) & bit and self.clock & (2 if value & bit else 4):

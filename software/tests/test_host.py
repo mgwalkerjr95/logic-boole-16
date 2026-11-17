@@ -322,7 +322,7 @@ class TheBoard(unittest.TestCase):
         board = B.connect(backend=bus, log=log.append)
         self.assertEqual(len(log), 2)
         found = B.look(bus)
-        self.assertEqual((found["state"], found["firmware"], found["design"], found["threshold_a"]), ("ready", 2, 4, 1.564))
+        self.assertEqual((found["state"], found["firmware"], found["design"], found["threshold_a"]), ("ready", 2, 5, 1.564))
         self.assertEqual(found["serial"], "5354414E442D494E")       # the stand-in's
         # every section of the image went to the address it names, and was read back
         sections, entry = B.parse_image(fake.IMAGE)
@@ -510,7 +510,7 @@ class TheBoard(unittest.TestCase):
         with contextlib.redirect_stdout(out):
             self.assertEqual(cli.main(["--fake", "check"]), 0)
         lines = out.getvalue().splitlines()
-        self.assertIn("Loaded: firmware version 2, FPGA design version 4, serial number 5354414E442D494E.", lines)
+        self.assertIn("Loaded: firmware version 2, FPGA design version 5, serial number 5354414E442D494E.", lines)
         self.assertEqual(len([line for line in lines if line.endswith("every word right.")]), 2)
         self.assertEqual(lines[-1], 'The board is ready.  "logicboole" opens the app.')
         for bus, says in ((fake.FakeBus(stage="none"), "The board: not on USB."),
@@ -598,7 +598,7 @@ class TheBoard(unittest.TestCase):
             with self.assertRaises(T.TriggerError):
                 board.capture(glitch=2e-6)
             r = board.registers()
-            self.assertEqual((r["version"], r["stages"], r["waiting"], r["triggered"]), (4, 4, 0, 0))
+            self.assertEqual((r["version"], r["stages"], r["waiting"], r["triggered"]), (5, 4, 0, 0))
             real = bus.registers
             def older():                                            # design version 3: no register 2D and after
                 r = bytearray(real())
@@ -610,6 +610,40 @@ class TheBoard(unittest.TestCase):
             for more in (dict(trigger="A0=r"), dict(clock="A1=r", samples=5), dict(glitch=20e-9)):
                 with self.assertRaisesRegex(B.BoardError, "version 3.*has no trigger"):
                     board.capture(rate=1e6, **more)
+
+    def test_the_pis_lines_in_place_of_probes(self):
+        asked = (None, "", "off", "i2c", "uart", "spi", "all", "sda", "GPIO3", "i2c,uart", "scl gpio14", ["ce1", "i2c"])
+        self.assertEqual([T.pi_lines(x) for x in asked],
+                         [0, 0, 0, 0x003, 0x00C, 0x1F0, 0x1FF, 0x001, 0x002, 0x00F, 0x006, 0x103])
+        with self.assertRaisesRegex(T.TriggerError, "gpio4 is not one of the Pi's lines"):
+            T.pi_lines("i2c,gpio4")
+        bus = self.bus()
+        with B.connect(backend=bus) as board:
+            changes = lambda cap: [c["changes"] > 0 for c in cap.summary()[:4]]         # noqa: E731
+            cap = board.capture(rate=1e6, seconds=0.02)             # the stand-in's I2C bus is on the probes A0, A1
+            self.assertEqual((changes(cap), "pi" in cap.info, cap.names[:2]), ([True, True, False, False], False, ["A0", "A1"]))
+            cap = board.capture(rate=1e6, seconds=0.02, pi="i2c")   # the Pi's lines there: the stand-in's read low
+            self.assertEqual((cap.ok, changes(cap), bytes(bus.reg[0x2E:0x30])), (True, [False] * 4, b"\x03\x00"))
+            self.assertEqual((cap.info["pi"], cap.names[:3]), ({"A0": "GPIO2 (SDA)", "A1": "GPIO3 (SCL)"}, ["SDA", "SCL", "A2"]))
+            self.assertEqual(board.inputs() & 3, 0)
+            cap = board.capture(rate=1e6, seconds=0.02, pi=["uart", "ce1"])     # other lines: A0, A1 are the probes
+            self.assertEqual((changes(cap), bytes(bus.reg[0x2E:0x30])), ([True, True, False, False], b"\x0C\x01"))
+            self.assertEqual((cap.names[2], cap.names[3], cap.names[8], cap.info["pi"]["B0"]), ("TXD", "RXD", "CE1", "GPIO7 (CE1)"))
+            cap = board.capture(rate=1e6, seconds=0.02, pi="sda", trigger="A1=f")       # SCL, a probe, still triggers
+            self.assertEqual((cap.trigger is not None, changes(cap)[:2]), (True, [False, True]))
+            cap = board.capture(rate=1e6, seconds=0.02)             # and off again
+            self.assertEqual((bytes(bus.reg[0x2E:0x30]), "pi" in cap.info, changes(cap)[:2]), (b"\x00\x00", False, [True, True]))
+            self.assertEqual(board.inputs() & 3, 3)
+            real = bus.registers
+            def older():                                            # design version 4: no registers 2E, 2F
+                r = bytearray(real())
+                r[3] = 4
+                r[0x2E:0x30] = bytes(2)
+                return bytes(r)
+            bus.registers = older
+            self.assertTrue(board.capture(rate=1e6, samples=100, trigger="A0=f").ok)
+            with self.assertRaisesRegex(B.BoardError, "version 4.*does not take the Pi's lines"):
+                board.capture(rate=1e6, samples=100, pi="i2c")
 
     def test_overflow_ends_a_capture_early_and_whole(self):
         for fmt in ("rle", "raw"):
@@ -795,6 +829,10 @@ class TheApp(unittest.TestCase):
         self.assertEqual((c["state"], c["problems"], c["glitch_ns"], c["clock"]), ("done", [], [20] + [0] * 7 + [1000] * 8, None))
         c = capture({"rate": 1e6, "seconds": 0.02, "trigger": "A0=f", "samples_before": 7})
         self.assertEqual((c["trigger_sample"], c["samples"], c["glitch_ns"]), (7, 20007, None))    # no filter: none named
+        self.assertEqual(c["pi"], None)
+        c = capture({"rate": 1e6, "seconds": 0.02, "pi": "uart,sda"})         # the Pi's lines in place of probes
+        self.assertEqual((c["state"], c["problems"], c["pi"]),
+                         ("done", [], {"A0": "GPIO2 (SDA)", "A2": "GPIO14 (TXD)", "A3": "GPIO15 (RXD)"}))
         c = capture({"rate": 1e6, "samples": 1234})                 # a length in samples, with no clock
         self.assertEqual((c["samples"], c["clock"]), (1234, None))
         c = capture({"rate": 1e6, "clock": "A1=r", "samples": 300, "trigger": "A0=1 for 3", "samples_before": 10})
@@ -807,7 +845,8 @@ class TheApp(unittest.TestCase):
                        ({"clock": "A1=r", "samples": 10, "trigger": "A0=r", "before": 1e-3}, "is a number of samples."),
                        ({"clock": "A1=r", "samples": 10, "trigger": "A0=1 for 1us"}, "no sample rate"),
                        ({"clock": "A0=1", "samples": 10}, "an input and an edge"), ({"seconds": 0.02, "glitch": "2us"}, "10 ns"),
-                       ({"seconds": 0.02, "glitch": "C1=20ns"}, "C1"), ({"samples": "many"}, "is a number"),
+                       ({"seconds": 0.02, "glitch": "C1=20ns"}, "C1"), ({"seconds": 0.02, "pi": "gpio4"}, "the Pi's lines"),
+                       ({"samples": "many"}, "is a number"),
                        ({"clock": "A1=r"}, "With a capture clock the length is a number of samples."),
                        ({"seconds": 0.02, "trigger": "A0=r", "samples_before": "x"}, "is a number"),
                        ({"seconds": 0.02, "trigger": "A0=r", "before": 1e-3, "samples_before": 5}, "before")):
@@ -1339,6 +1378,9 @@ class TheAgentsServer(unittest.TestCase):
         self.assertEqual((wrong, cap["triggered"], cap["trigger_sample"], cap["trigger_seconds"], cap["samples"]),
                          (False, True, want, want / 1e6, want + 20000))
         self.assertEqual((cap["trigger"], cap["glitch_ns"]["A7"], "B0" in cap["glitch_ns"]), ("A1=f then A0=r", 50, False))
+        self.assertNotIn("pi", cap)
+        wrong, cap = self.tool("capture", rate=1e6, seconds=0.02, pi="i2c")
+        self.assertEqual((wrong, cap["ok"], cap["pi"], cap["changing"]), (False, True, {"A0": "GPIO2 (SDA)", "A1": "GPIO3 (SCL)"}, {}))
         wrong, cap = self.tool("capture", rate=1e6, seconds=0.02, trigger="B3=r", timeout=0.05)
         self.assertEqual((wrong, cap["ok"], cap["triggered"], "trigger_sample" in cap), (False, True, False, False))
         self.assertIn("timeout", cap["stopped"])
@@ -1376,6 +1418,7 @@ class TheAgentsServer(unittest.TestCase):
                                 ("capture", {"save_as": ["x.txt"]}, "saved as"), ("capture", {"clock": "A0=r"}, "give samples"),
                                 ("capture", {"samples": 2.5}, "a whole number"), ("capture", {"raw": "yes"}, "true or false"),
                                 ("capture", {"save_as": "x.sr"}, "a list of texts"), ("capture", {"glitch": "5s"}, "10 ns"),
+                                ("capture", {"pi": "gpio4"}, "the Pi's lines"), ("capture", {"pi": 3}, "pi"),
                                 ("set_thresholds", {}, "a is not given"), ("set_thresholds", {"a": 9}, "A threshold is"),
                                 ("measure", {"file": os.path.join(self.dir.name, "none.lb16")}, "no such file"),
                                 ("measure", {"file": __file__}, "not a Logic Boole capture file"),
@@ -1428,6 +1471,11 @@ class TheCommandLine(unittest.TestCase):
             self.assertIn("glitch filter: A0 50 ns, A1 50 ns", out)
             back = Capture.load(path)
             self.assertEqual((back.trigger, back.samples), (want, want + 20000))
+            code, out, err = self.run_it("capture", "--rate", "1M", "--time", "20ms", "--pi", "i2c,ce1", path)
+            self.assertEqual(code, 0, err)
+            self.assertIn("the Pi's lines: A0 is GPIO2 (SDA), A1 is GPIO3 (SCL), B0 is GPIO7 (CE1)", out)
+            back = Capture.load(path)
+            self.assertEqual((back.names[0], back.names[1], back.names[2], back.names[8]), ("SDA", "SCL", "A2", "CE1"))
         code, out, err = self.run_it("capture", "--rate", "1M", "--time", "20ms", "--trigger", "A0=f", "--before", "7", "--json")
         got = json.loads(out[out.index("{"):])
         self.assertEqual((code, got["trigger_sample"], got["trigger_seconds"], got["samples"]), (0, 7, 7e-6, 20007))
@@ -1524,7 +1572,8 @@ class TheCommandLine(unittest.TestCase):
         for words, why in ((("capture", "--trigger", "B9=r"), "B9 is not a channel"),
                            (("capture", "--clock", "A1"), "With --clock the capture's length is a number of samples"),
                            (("capture", "--trigger", "A0=1 for 1us", "--clock", "A1", "-n", "5"), "no sample rate"),
-                           (("capture", "--glitch", "2us"), "10 ns")):
+                           (("capture", "--glitch", "2us"), "10 ns"),
+                           (("capture", "--pi", "gpio4"), "gpio4 is not one of the Pi's lines")):
             code, out, err = self.run_it(*words)
             self.assertNotEqual(code, 0, words)
             self.assertIn(why, out + err, words)

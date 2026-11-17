@@ -167,6 +167,10 @@ def parser():
     c.add_argument("--glitch", type=T.parse_filter, metavar="TIME", help="a glitch filter: \"20ns\" for every "
                    "input, or \"A0=20ns,B=1us\" for a channel and a pod (10 ns ... 1.25 us).  A change counts "
                    "once the input has held its new level for that long")
+    c.add_argument("--pi", metavar="LINES", help="lines of the Raspberry Pi the board sits on, in place of probes: "
+                   "\"i2c\" (SDA for A0, SCL for A1), \"uart\" (TXD for A2, RXD for A3), \"spi\" (MOSI, MISO, "
+                   "SCLK, CE0 for A4 ... A7, CE1 for B0), \"all\", or single lines such as \"scl,gpio14\".  The "
+                   "line's solder jumper on the board has to be closed")
     c.add_argument("--json", action="store_true")
 
     c = command("threshold", "sets the thresholds, in volts at the probe")
@@ -485,7 +489,7 @@ def capture(board, args):
                             fmt="raw" if args.raw else "rle", test=args.test, a=args.a, b=args.b,
                             cancel=lambda: bool(asked), trigger=args.trigger, before=before,
                             samples_before=samples_before, timeout=args.timeout, clock=args.clock,
-                            glitch=args.glitch)
+                            glitch=args.glitch, pi=args.pi)
     finally:
         signal.signal(signal.SIGINT, old)
     for path in args.files:
@@ -501,6 +505,8 @@ def capture(board, args):
     if cap.info.get("glitch_ns"):
         print("  glitch filter: %s" % ", ".join("%s %d ns" % (c, ns) for c, ns in zip(CHANNELS, cap.info["glitch_ns"])
                                                 if ns))
+    if cap.info.get("pi"):
+        print("  the Pi's lines: %s" % ", ".join("%s is %s" % item for item in cap.info["pi"].items()))
     for line in trigger_lines(cap):
         print(line)
     if cap.overflow:

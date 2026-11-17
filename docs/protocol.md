@@ -90,7 +90,7 @@ several bytes is consistent: the status and the counts are copied when the read 
 
 | Register | | |
 |---|---|---|
-| 00 to 03 | R | `4C 42 16`, and the design's version, 04 |
+| 00 to 03 | R | `4C 42 16`, and the design's version, 05 |
 | 04 | RW | Bit 0: the format, 0 raw, 1 run-length. Bit 1: the test pattern in place of the probes. Bits 7:4: how far the test pattern is shifted |
 | 05 | R | The status. Bit 0: the PLL has locked. 1: RUN. 2: sampling. 3: done. 4: overflow. Bits 7:5: the writer's state, 0 when idle |
 | 06, 07 | R | The inputs now: pod A (bit 0 is A0), pod B |
@@ -106,6 +106,7 @@ several bytes is consistent: the status and the counts are copied when the read 
 | 2B | R | 13: the FIFO holds 2^13 words |
 | 2C | R | 200: the sample rate with the divider at 0, in millions of samples a second |
 | 2D | R | 4: how many trigger stages the design has. 0 in design version 03, which has none of the registers below |
+| 2E, 2F | RW | The Raspberry Pi's lines in place of probes, 9 bits: see below. Design version 05 on; earlier designs read 0 |
 | 30 | RW | The capture clock. Bit 0: a sample at each edge of one input, in place of the divider. Bit 1: at its rising edges. Bit 2: at its falling edges. Bits 7:4: which input, 0 (A0) to 15 (B7) |
 | 31 | RW | How many trigger stages are in use, 0 to 4. 0: no trigger, the capture begins at once |
 | 32, 33 | RW | How many words the FPGA's FIFO keeps while it waits for the trigger, 0 to 8184 |
@@ -117,7 +118,8 @@ several bytes is consistent: the status and the counts are copied when the read 
 | 80 to 8F | RW | The glitch filter of A0 to A7 and B0 to B7: N samples of 5 ns, 0 to 250. 0: off |
 
 Registers 04, 08 to 0A, 10 to 14, 20, 21 and 30 to 33 are taken as RUN rises. The thresholds act at once. The
-stages (38 to 7F) and the glitch filters (80 to 8F) act as they are written: write them while RUN is low.
+stages (38 to 7F), the glitch filters (80 to 8F) and the Pi's lines (2E, 2F) act as they are written: write
+them while RUN is low.
 
 **Sample rate** = 200 MS/s / (divider + 1): 200 MS/s, 100, 66.7, 50, 40 and so on, down to 11.9 samples a second.
 The FPGA's clock is 100 MHz, and each input is taken at both of its edges: with the divider at 0 every one of
@@ -184,11 +186,36 @@ samples in a row, 5 ns apart, show the new level, and a pulse shorter than N × 
 filter, all 16 are delayed alike, by the largest N plus two clock cycles, so edges that pass keep their places
 against each other.
 
+### The Raspberry Pi's lines
+
+Nine pins of the Pi's 40-pin header reach the FPGA, each through 1 kΩ and a solder jumper that is open as the
+board is shipped. With its bit set in registers 2E and 2F, a line takes the place of one probe: the FPGA
+samples it every 5 ns as it does a probe, and the sample's bit for that channel is then the Pi's line. The glitch
+filter, the capture clock, the trigger and register 06 see it under the channel's number. Which channel a line
+takes is fixed:
+
+| Bit | Line | In place of | Jumper |
+|---|---|---|---|
+| 2E bit 0 | GPIO2, I2C1 SDA (pin 3) | A0 | JP2 |
+| 2E bit 1 | GPIO3, I2C1 SCL (pin 5) | A1 | JP3 |
+| 2E bit 2 | GPIO14, UART TXD (pin 8) | A2 | JP9 |
+| 2E bit 3 | GPIO15, UART RXD (pin 10) | A3 | JP10 |
+| 2E bit 4 | GPIO10, SPI0 MOSI (pin 19) | A4 | JP7 |
+| 2E bit 5 | GPIO9, SPI0 MISO (pin 21) | A5 | JP6 |
+| 2E bit 6 | GPIO11, SPI0 SCLK (pin 23) | A6 | JP8 |
+| 2E bit 7 | GPIO8, SPI0 CE0 (pin 24) | A7 | JP5 |
+| 2F bit 0 | GPIO7, SPI0 CE1 (pin 26) | B0 | JP4 |
+
+A Pi line is 3.3 V logic and 1 is high: it does not pass a comparator, so the pod's threshold does not act on
+it. The FPGA's nine pins are inputs with a pull-down at all times, so a line whose jumper is open reads 0. The
+test pattern (register 04 bit 1) replaces the Pi's lines as it does the probes.
+
 ## A capture
 
 1. Write registers 04, 08 to 0A, 10 to 14 and 20, 21 with `D0`. The writer's state (register 05, bits 7:5) must
    be 0. Read them back. If register 2D is not 0, also write 30 to 33, the modes and the 16 bytes of the stages
    in use, and the 16 glitch filters: they keep what the last capture set, so write zeros for a plain capture.
+   If the design's version is 05 or more, write 2E and 2F likewise.
 2. `C0`, `C3`, then `C2` with the buffer size and count. The software uses 8 buffers of 16 KB, with 4096 in
    register 20.
 3. Queue reads on endpoint 0x81, and keep several queued for as long as the capture runs. The software keeps 8
