@@ -1,0 +1,148 @@
+<!doctype html>
+<!-- Copyright (C) 2026 Michael Walker.  SPDX-License-Identifier: GPL-3.0-or-later -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Logic Boole 16</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%23090d0c'/%3E%3Cpath d='M2 11h3V5h4v6h3V5h2' fill='none' stroke='%234fc8ff' stroke-width='1.6'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="bar">
+  <div class="brand" title="Logic Boole 16">
+    <svg viewBox="0 0 26 16" width="26" height="16" aria-hidden="true"><path d="M1 13h5V3h6v10h5V3h6v10h2" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+    <span>LOGIC BOOLE 16</span>
+  </div>
+  <button id="start" class="go" title="Capture (Space)"><span class="ico">▶</span><span id="startText">Start</span></button>
+  <label class="f">Source
+    <select id="source">
+      <option value="demo">Simulated signals</option>
+      <option value="device">Logic Boole 16 (USB)</option>
+    </select>
+  </label>
+  <label class="f">Rate <select id="rate"></select></label>
+  <label class="f">Length <select id="dur"></select></label>
+  <label class="f" title="The board waits for this, and the capture's length counts from it. Pick a channel and an edge, or &quot;other…&quot; to describe the trigger as text. With simulated signals, time zero is put at the first such edge.">Trigger
+    <select id="trigCh"></select>
+    <select id="trigEdge"><option value="1">rising</option><option value="0">falling</option></select>
+    <input id="trigText" class="text" type="text" spellcheck="false" autocomplete="off" placeholder="B7=f then B0=r" hidden
+      title="B0=r   B0 rises (f: falls, e: either)&#10;A0=1 A1=0   A0 is high and A1 is low&#10;A2=f A0=1   A2 falls while A0 is high&#10;A0=1 for 10us   A0 has been high for 10 us, and still is&#10;A0=0 pulse 100ns..1us   a low pulse of that length has ended (..50ns: at most, 1us..: at least)&#10;in=r   the TRIG IN pin rises&#10;B7=f then B0=r   up to four of these in turn">
+  </label>
+  <span class="grow"></span>
+  <div class="seg" role="group" aria-label="Zoom">
+    <button id="zout" title="Zoom out (−)">−</button>
+    <button id="zfit" title="Show the whole capture (F)">Fit</button>
+    <button id="zin" title="Zoom in (+)">+</button>
+  </div>
+  <label class="f">Values
+    <select id="radix">
+      <option value="hex">Hex</option>
+      <option value="ascii">ASCII</option>
+      <option value="dec">Decimal</option>
+      <option value="bin">Binary</option>
+    </select>
+  </label>
+  <button id="open" title="Open a saved capture (.lb16) or raw 16-bit samples (.bin)">Open</button>
+  <button id="save" title="Save this capture with its names and analyzers">Save</button>
+  <select id="export" class="menu" title="Export as CSV">
+    <option value="">Export</option>
+    <option value="rows">Decoded messages (CSV)</option>
+    <option value="edges">Signal changes (CSV)</option>
+  </select>
+  <input id="file" type="file" accept=".lb16,.bin" hidden>
+</header>
+
+<div id="progress" class="progress" hidden><div id="progressBar"></div></div>
+
+<main>
+  <section class="scope">
+    <div class="rulerRow">
+      <div class="corner"><span id="hidden"></span></div>
+      <canvas id="ruler"></canvas>
+    </div>
+    <div class="rows" id="rows">
+      <div class="labels" id="labels"></div>
+      <div class="waveBox"><canvas id="wave"></canvas></div>
+    </div>
+    <div class="overviewRow">
+      <div class="corner small">Whole capture</div>
+      <canvas id="overview"></canvas>
+    </div>
+  </section>
+
+  <aside class="side">
+    <section class="card" id="deviceCard" hidden>
+      <h2>Board</h2>
+      <p id="devText" class="devText"></p>
+      <div class="row" id="devControls">
+        <label class="f" title="Probes: what pods A and B see.  Built-in test: the FPGA's own test pattern instead, to check the path from the FPGA to the screen with nothing connected.">Input
+          <select id="pattern"><option value="0">Probes</option><option value="1">Built-in test</option></select>
+        </label>
+        <button id="prepare" hidden>Load the board</button>
+      </div>
+      <div class="row" id="devThresholds" title="An input reads 1 above its pod's threshold.  About half the signal's voltage is a good choice: 1.65 V for 3.3 V logic, 0.9 V for 1.8 V.">
+        <label class="f">Threshold A <input id="thA" class="volts" type="number" min="0" max="3.1" step="0.05" inputmode="decimal"> V</label>
+        <label class="f">B <input id="thB" class="volts" type="number" min="0" max="3.1" step="0.05" inputmode="decimal"> V</label>
+      </div>
+      <div class="row" id="devTrigger" hidden>
+        <label class="f" title="How much from before the trigger is kept, as a part of the length. The board keeps its last 8184 changes of the inputs while it waits, so busy signals have less; and a trigger that comes soon after Start has less before it.">Before the trigger
+          <select id="trigBefore"><option value="0.1">10 %</option><option value="0.5">50 %</option><option value="1">100 %</option><option value="0">nothing</option></select>
+        </label>
+      </div>
+      <div class="row">
+        <label class="f" title="A change of an input counts once the input has held its new level this long: shorter pulses are left out, before the samples are kept and before the trigger sees them. 10 ns to 1.25 us.&#10;50ns   every input&#10;A0=20ns,B=1us   one channel, and pod B">Glitch filter
+          <input id="glitch" class="text" type="text" spellcheck="false" autocomplete="off" placeholder="off">
+        </label>
+      </div>
+      <div class="row">
+        <label class="f" title="A sample at each edge of one input, the circuit's own clock (up to 50 MHz), in place of one every so many nanoseconds: every sample is then one bit time of the bus.">Capture clock
+          <select id="clockCh"></select>
+          <select id="clockEdge" hidden><option value="r">rising</option><option value="f">falling</option><option value="e">both edges</option></select>
+        </label>
+        <label class="f" id="clockLen" hidden>Samples <input id="clockSamples" class="count" type="number" min="1" step="1" value="100000" inputmode="numeric"></label>
+      </div>
+      <p id="clockNote" class="note" hidden>The capture's length is this number of samples; Length is not used. Rate only sets the time scale: with it at the clock's frequency the times shown are right. Times in a trigger are numbers of samples.</p>
+      <p id="devCheck" class="devCheck" hidden></p>
+      <pre id="devLog" hidden></pre>
+    </section>
+
+    <section class="card">
+      <h2>Analyzers
+        <span class="hbtns">
+          <button id="detect" title="Look for I²C, SPI and serial in this capture">Auto-detect</button>
+        </span>
+      </h2>
+      <div id="analyzers"></div>
+      <div class="row add">
+        <button data-add="i2c">+ I²C</button>
+        <button data-add="spi">+ SPI</button>
+        <button data-add="uart">+ Serial</button>
+        <button id="addSigrok" title="One of sigrok's protocol decoders (CAN, 1-Wire, JTAG, SWD and about a hundred more), run by sigrok-cli if it is installed">+ More…</button>
+      </div>
+      <p id="detectNote" class="note" hidden></p>
+    </section>
+
+    <section class="card grow">
+      <h2>Decoded messages <span id="rowCount" class="count"></span></h2>
+      <input id="search" type="search" placeholder="Search: 0x48, MISO, frame 3 …" autocomplete="off">
+      <div id="table" class="table" tabindex="0"><div id="tableSize"><div id="tableRows"></div></div></div>
+    </section>
+
+    <section class="card">
+      <h2>Measure</h2>
+      <div id="measure" class="measure"></div>
+    </section>
+  </aside>
+</main>
+
+<footer class="status">
+  <span id="capInfo"></span>
+  <span class="grow"></span>
+  <span class="hint">Scroll: zoom · Drag: move · Shift-drag: measure · Double-click: zoom in · F: fit · Space: capture</span>
+</footer>
+
+<div id="tip" class="tip" hidden></div>
+<script type="module" src="app.js"></script>
+</body>
+</html>

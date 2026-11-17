@@ -1,0 +1,21 @@
+# Copyright (C) 2026 Michael Walker
+# SPDX-License-Identifier: CERN-OHL-S-2.0
+#
+# What this design adds to the board's pin constraints in pins.ucf: build.sh reads both files.
+#
+# INIT_B is an ordinary pin once the FPGA is configured.  The design makes it an input with a pull-up, so that the
+# board's 4.7k pull-up is not worked against and the FX3 reads it high.
+NET "init_b" LOC = "P39" | IOSTANDARD = LVCMOS18;    # IO_L65P_INIT_B_2, bank 2
+
+# The lines the FPGA drives to the FX3 have no series resistors, so their drive strength is set low: 8 mA, about
+# 40 ohms at 1.8 V.  A signal-integrity simulation of these lines passed with this setting and edges of 0.4 ...
+# 0.8 ns.  The clock and the data use the same setting, so that they leave the FPGA alike.
+NET "fx3_pclk" DRIVE = 8 | SLEW = FAST;
+NET "fx3_dq<*>" DRIVE = 8 | SLEW = FAST;
+NET "fx3_ctl0" DRIVE = 8 | SLEW = FAST;
+NET "fx3_ctl1" DRIVE = 8 | SLEW = FAST;
+NET "fx3_ctl2" DRIVE = 8 | SLEW = FAST;
+NET "fx3_ctl3" DRIVE = 8 | SLEW = FAST;
+NET "fx3_ctl7" DRIVE = 8 | SLEW = FAST;
+NET "fx3_ctl11" DRIVE = 8 | SLEW = FAST;
+NET "fx3_ctl12" DRIVE = 8 | SLEW = FAST;

@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<!-- Copyright (C) 2026 Michael Walker -->
+<!-- SPDX-License-Identifier: CERN-OHL-S-2.0 -->
+<!-- The quick start guide.  quick-start.pdf is this page printed from a browser on US Letter paper, with the
+     browser's own headers and footers off and background graphics on. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Logic Boole 16: quick start</title>
+<style>
+  @page { size: Letter; margin: 11mm 14mm 10mm 14mm; }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { margin: 0; font: 8.9pt/1.38 "Helvetica Neue", Helvetica, Arial, sans-serif; color: #1c2321; }
+  .page { break-after: page; }
+  .page:last-child { break-after: auto; }
+  header { display: flex; align-items: baseline; justify-content: space-between; border-bottom: 2.2pt solid #1f5a3d;
+           padding-bottom: 5pt; margin-bottom: 9pt; }
+  header h1 { font-size: 21pt; font-weight: 700; margin: 0; letter-spacing: -0.2pt; }
+  header h1 span { font-weight: 300; }
+  header p { margin: 0; color: #55605b; font-size: 9pt; }
+  h2 { font-size: 11.5pt; margin: 0 0 4pt; }
+  p { margin: 0 0 5pt; }
+  ul { margin: 0 0 5pt; padding-left: 13pt; }
+  li { margin-bottom: 2.2pt; }
+  code, pre { font-family: Menlo, Consolas, monospace; }
+  code { font-size: 8.3pt; background: #eef2ef; padding: 0.4pt 2.5pt; border-radius: 2pt; }
+  pre { font-size: 7.6pt; line-height: 1.38; background: #17211c; color: #e9f1ec; padding: 5.5pt 8pt; border-radius: 3pt;
+        margin: 3pt 0 6pt; white-space: pre-wrap; }
+  pre.out { background: #eef2ef; color: #1c2321; }
+  .two { display: flex; gap: 14pt; }
+  .two > div { flex: 1; min-width: 0; }
+  .need { flex: 0 0 52% !important; }
+  .fill { background: #ffe08a; padding: 0 2pt; }
+  .step { display: flex; gap: 9pt; margin-top: 6pt; break-inside: avoid; }
+  .n { flex: 0 0 19pt; height: 19pt; border-radius: 50%; background: #1f5a3d; color: #fff; font-weight: 700;
+       font-size: 10.5pt; text-align: center; line-height: 19pt; }
+  .step > div:not(.n) { flex: 1; min-width: 0; }
+  .cols { columns: 2; column-gap: 16pt; }
+  .cols li { break-inside: avoid; }
+  .run { display: flex; align-items: center; gap: 9pt; }
+  .run pre { flex: 0 0 auto; padding-right: 22pt; }
+  .run p { margin: 0; }
+  .note { border-left: 2.5pt solid #c9891a; background: #fbf5e8; padding: 4pt 7pt; margin: 4pt 0 6pt; }
+  .box { border: 0.8pt solid #b9c4be; border-radius: 3pt; padding: 5pt 8pt 3pt; margin-top: 7pt; break-inside: avoid; }
+  table { border-collapse: collapse; width: 100%; margin: 2pt 0 6pt; }
+  th, td { text-align: left; vertical-align: top; padding: 2.1pt 6pt 2.1pt 0; border-bottom: 0.5pt solid #d4dcd7; }
+  th { font-size: 8.4pt; color: #55605b; font-weight: 600; }
+  .os { font-weight: 700; }
+  svg text { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }
+  footer { margin-top: 5pt; padding-top: 3pt; border-top: 0.5pt solid #b9c4be; color: #55605b; font-size: 7.8pt;
+           display: flex; justify-content: space-between; }
+</style>
+</head>
+<body>
+
+<div class="page">
+<header>
+  <h1>Logic Boole 16 <span>quick start</span></h1>
+  <p>Revision C &middot; from the box to a first capture</p>
+</header>
+
+<div class="two">
+  <div class="need">
+    <h2>What you need</h2>
+    <ul>
+      <li><b>The board.</b></li>
+      <li><b>A computer:</b> a Mac, or Linux (Debian, Ubuntu, Raspberry Pi OS). Windows is not supported.</li>
+      <li><b>A USB-C cable made for USB 3</b> (5 Gbit/s; often marked SS or 5 Gbps), to a USB 3 port of the
+        computer: USB-C to USB-C, or USB-C to a blue USB-A socket. This one cable carries power and data. A
+        USB 2 cable or port also works, for slow signals: the board then carries about a ninth as much.</li>
+      <li><b>Leads for your signals:</b> jumper wires with sockets for 2.54 mm pins, or a 16-way (2 &times; 8)
+        ribbon cable with an IDC socket for each pod.</li>
+      <li><b>Python 3.9 or later</b> and <b>libusb</b> on the computer (step 1). There is nothing else to
+        install, and no driver.</li>
+    </ul>
+
+  </div>
+
+  <div>
+    <svg viewBox="-20 -175 2200 2085" width="100%" role="img" aria-label="The board from above, with its connectors named">
+      <image href="../hardware/images/front.jpg" x="0" y="0" width="1500" height="1571"/>
+      <g fill="none" stroke="#c9891a" stroke-width="8">
+        <rect x="1285" y="705" width="205" height="190" rx="14"/>
+        <rect x="120" y="1275" width="530" height="280" rx="14"/>
+        <rect x="798" y="1275" width="525" height="280" rx="14"/>
+        <rect x="655" y="1290" width="138" height="265" rx="14"/>
+        <rect x="22" y="1345" width="92" height="180" rx="14"/>
+        <rect x="438" y="22" width="930" height="112" rx="14"/>
+        <path d="M1490 800 H1555"/><path d="M900 22 V-50"/>
+        <path d="M385 1555 V1630"/><path d="M1060 1555 V1630"/><path d="M724 1555 V1730"/><path d="M68 1525 V1810"/>
+      </g>
+      <g font-size="66" fill="#1c2321">
+        <text x="1570" y="780" font-weight="700">USB-C socket:</text>
+        <text x="1570" y="860">to the computer</text>
+        <text x="750" y="-80" text-anchor="middle"><tspan font-weight="700">40-pin header:</tspan> only for a Raspberry Pi</text>
+        <text x="385" y="1705" text-anchor="middle" font-weight="700">Pod A: A7 &hellip; A0</text>
+        <text x="1060" y="1705" text-anchor="middle" font-weight="700">Pod B: B7 &hellip; B0</text>
+        <text x="724" y="1805" text-anchor="middle"><tspan font-weight="700">Trigger header:</tspan> &minus;, OUT, IN</text>
+        <text x="20" y="1890"><tspan font-weight="700">Lights:</tspan> PWR, ARM, TRIG</text>
+      </g>
+    </svg>
+  </div>
+</div>
+
+<div class="step"><div class="n">1</div><div>
+  <h2>Get the computer ready (once)</h2>
+  <div class="two">
+    <div>
+      <p><span class="os">Mac.</span> Install libusb with <a href="https://brew.sh">Homebrew</a>:</p>
+      <pre>brew install libusb</pre>
+      <p><code>python3 --version</code> should say 3.9 or later. If it is missing, <code>brew install python</code>.</p>
+    </div>
+    <div>
+      <p><span class="os">Linux, Raspberry Pi OS.</span> Python and libusb are already there. After the download
+        below, allow your user to open the board, once:</p>
+      <pre>sudo cp software/udev/60-logic-boole.rules /etc/udev/rules.d/
+sudo udevadm control --reload
+sudo udevadm trigger</pre>
+    </div>
+  </div>
+  <p>Then download the Logic Boole 16 repository from <b>github.com/mgwalkerjr95/logic-boole-16</b> (Download ZIP,
+    or <code>git clone</code>), and open a terminal in its folder. Nothing in it needs building or installing.</p>
+</div></div>
+
+<div class="step"><div class="n">2</div><div>
+  <h2>Plug the board in</h2>
+  <p>Connect the board's USB-C socket to a USB 3 port of the computer. Leave the probes unconnected for now.</p>
+  <div class="note"><b>Mac laptops</b> ask "Allow accessory to connect?" for a USB device they have not seen: choose
+    <b>Allow</b>. macOS can ask once more in step 3, when the board comes back to USB under its own name.</div>
+</div></div>
+
+<div class="step"><div class="n">3</div><div>
+  <h2>Check it</h2>
+  <pre>./logicboole check</pre>
+  <p style="margin-bottom:2pt">This loads the board and captures a test pattern that the board makes itself. In a few seconds it prints:</p>
+  <pre class="out">Python 3.12.4: fine.
+libusb: found.
+The board: on USB.
+The firmware: downloaded, checked and kept on this computer.
+Loaded: firmware version 2, FPGA design version 4, serial number 0009021E1311241C.
+USB: 5 Gbit/s.
+A capture of the FPGA's test pattern, 100000000 samples at 200 MS/s: every word right.
+A capture of the FPGA's test pattern, 2000000 samples at 10 MS/s: every word right.
+The board is ready.  "logicboole" opens the app.</pre>
+  <p>If something is missing, its line says what to do. The board keeps no firmware: the software loads it at
+    every plug-in, and downloads it the first time (the computer needs the internet that once). Once loaded, the
+    ARM light blinks once a second.</p>
+</div></div>
+
+
+</div>
+
+<div class="page">
+
+<div class="step" style="margin-top:0"><div class="n">4</div><div>
+  <h2>Connect your circuit</h2>
+  <ul class="cols">
+        <li><b>Ground first.</b> Join any pin of a pod's lower row to your circuit's ground. Every pin of the
+          lower rows is ground.</li>
+        <li><b>Then the signals,</b> to pins of the upper rows: A0 to A7 on pod A, B0 to B7 on pod B. The names
+          are printed on the board above the pods. Each input takes up to &plusmn;25 V.</li>
+        <li>Each pod has its own threshold, so pod A can watch 3.3 V logic while pod B watches 1.8 V.</li>
+        <li>For signals faster than a few megahertz, keep the leads short and put a ground lead beside the
+          signal.</li>
+        <li>The trigger header is 3.3 V logic: &minus; is ground, OUT goes high when a capture triggers, IN can
+          be part of a trigger.</li>
+  </ul>
+  <div style="text-align:center">
+      <svg viewBox="0 0 760 250" width="52%" role="img" aria-label="The pods seen from the front">
+        <text x="380" y="20" text-anchor="middle" font-size="19" fill="#55605b">Looking into the pods from the board's edge, parts side up</text>
+        <g font-size="19" fill="#1c2321" text-anchor="middle">
+          <text x="168" y="58" font-weight="700">Pod A</text><text x="592" y="58" font-weight="700">Pod B</text>
+          <text x="380" y="58" font-weight="700">Trigger</text>
+          <g font-size="17">
+            <text x="63" y="86">A7</text><text x="93" y="86">A6</text><text x="123" y="86">A5</text><text x="153" y="86">A4</text>
+            <text x="183" y="86">A3</text><text x="213" y="86">A2</text><text x="243" y="86">A1</text><text x="273" y="86">A0</text>
+            <text x="487" y="86">B7</text><text x="517" y="86">B6</text><text x="547" y="86">B5</text><text x="577" y="86">B4</text>
+            <text x="607" y="86">B3</text><text x="637" y="86">B2</text><text x="667" y="86">B1</text><text x="697" y="86">B0</text>
+            <text x="350" y="118">&minus;</text><text x="380" y="118">OUT</text><text x="414" y="118">IN</text>
+          </g>
+        </g>
+        <g fill="#2a2f2d">
+          <rect x="40" y="96" width="256" height="84" rx="5"/><rect x="464" y="96" width="256" height="84" rx="5"/>
+          <rect x="333" y="126" width="98" height="38" rx="4"/>
+        </g>
+        <g fill="#e2b93b">
+          <g id="row"><rect x="56" y="112" width="14" height="14"/><rect x="86" y="112" width="14" height="14"/>
+            <rect x="116" y="112" width="14" height="14"/><rect x="146" y="112" width="14" height="14"/>
+            <rect x="176" y="112" width="14" height="14"/><rect x="206" y="112" width="14" height="14"/>
+            <rect x="236" y="112" width="14" height="14"/><rect x="266" y="112" width="14" height="14"/></g>
+          <use href="#row" x="424"/>
+          <rect x="343" y="138" width="14" height="14"/><rect x="373" y="138" width="14" height="14"/><rect x="407" y="138" width="14" height="14"/>
+        </g>
+        <g fill="#9aa39e"><use href="#row" y="38"/><use href="#row" x="424" y="38"/></g>
+        <rect x="20" y="186" width="720" height="9" fill="#1f5a3d"/>
+        <g font-size="18" fill="#1c2321">
+          <rect x="60" y="212" width="14" height="14" fill="#e2b93b"/><text x="82" y="225">upper row: the 16 signal pins</text>
+          <rect x="420" y="212" width="14" height="14" fill="#9aa39e"/><text x="442" y="225">lower row: ground, every pin</text>
+        </g>
+      </svg>
+  </div>
+</div></div>
+
+<div class="step"><div class="n">5</div><div>
+  <h2>Take a capture in the app</h2>
+  <div class="run"><pre>./logicboole</pre><p>opens the app in your browser, at <code>http://localhost:8016</code>, with the board as its source.</p></div>
+  <ul class="cols">
+        <li><b>Set the two thresholds</b> to about half your logic voltage: 2.5 V for 5 V logic, 1.65 V for
+          3.3 V, 0.9 V for 1.8 V, 0.6 V for 1.2 V. They go from 0.3 V to 3 V.</li>
+        <li><b>Pick a rate and a length.</b> Ten times your fastest signal or more is a good rate to start
+          with; the fastest is 200 MS/s, a sample every 5 ns. Then <b>press Start</b>, or the space bar.</li>
+        <li><b>Auto-detect</b> looks for I&sup2;C, SPI and serial in the capture and decodes them. Point at a
+          pulse for its width and frequency.</li>
+        <li>To wait for an event, pick a channel and an edge under Trigger before you press Start.</li>
+        <li>No circuit at hand? <code>./logicboole --fake</code> runs the app with a stand-in board that makes
+          an I&sup2;C bus.</li>
+  </ul>
+</div></div>
+
+<div class="step"><div class="n">6</div><div>
+  <h2>Go further</h2>
+  <p><code>./logicboole capture bus.sr --rate 10M --time 2 -a 1.65 -b 0.9</code> takes a capture from the command
+    line into a file for PulseView. <code>./logicboole selftest</code> is the long check of the board: 34 captures,
+    about half a minute. <code>software/README.md</code> in the repository has every command, the triggers, the
+    protocol decoders, the Python package, and letting an AI agent use the board.</p>
+</div></div>
+
+<div class="box">
+  <h2>If something does not work</h2>
+  <table>
+    <tr><th style="width:30%">What you see</th><th>What to do</th></tr>
+    <tr><td>"The board: not on USB."</td><td>Try another cable and port. A cable made only for charging carries no data.</td></tr>
+    <tr><td>"macOS has not let it connect"</td><td>Run it again and choose Allow when macOS asks. Setting: "Allow accessories to connect".</td></tr>
+    <tr><td>"this user may not open it"</td><td>Linux: install the USB rule of step 1, then unplug the board and plug it in again.</td></tr>
+    <tr><td>"USB: 480 Mbit/s"</td><td>The cable or the port is USB 2. The board works; fast signals need a USB 3 cable and port.</td></tr>
+    <tr><td>A capture ends early: "overflow"</td><td>Too many changes for the link: lower the rate, shorten the capture, or use USB 3.</td></tr>
+    <tr><td>An input stays at 0 or at 1</td><td>Check the ground lead and that pod's threshold.</td></tr>
+    <tr><td>Anything else odd</td><td>Unplug the board and plug it in again: it is then as it was.</td></tr>
+  </table>
+</div>
+<div class="box">
+  <h2>On a Raspberry Pi 4 or 5</h2>
+  <ul class="cols">
+    <li>Set the board on the Pi's 40-pin header, on four M2.5 &times; 16 mm spacers; it takes its power there.
+      Join its USB-C socket to a blue USB 3 socket of the Pi with a short cable, for the data.</li>
+    <li>Then steps 1 to 6 as on any Linux computer. With no screen on the Pi: <code>./logicboole --host
+      0.0.0.0</code>, and open <code>http://</code>the Pi's name<code>:8016</code> elsewhere, on a network you
+      trust (the app has no password).</li>
+  </ul>
+</div>
+
+<footer><span>Logic Boole 16 quick start, revision C</span><span>&copy; 2026 Michael Walker &middot; open hardware and software: see the repository's README for the licenses</span></footer>
+</div>
+
+</body>
+</html>

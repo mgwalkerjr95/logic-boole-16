@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "logicboole"
+version = "1.0.0"
+description = "Host software for the Logic Boole 16, a 16-channel logic analyzer on USB 3"
+readme = "README.md"
+requires-python = ">=3.9"
+# the host software is GPL; the two files it loads into the board (logicboole/data) have their sources' terms
+license = "GPL-3.0-or-later AND CERN-OHL-S-2.0 AND MIT AND LicenseRef-Infineon-FX3-SDK"
+license-files = ["LICENSE", "logicboole/data/NOTICE.md"]
+authors = [{ name = "Michael Walker" }]
+dependencies = []
+
+[project.scripts]
+logicboole = "logicboole.cli:main"
+
+[tool.setuptools]
+packages = ["logicboole"]
+
+[tool.setuptools.package-data]
+logicboole = ["data/*", "web/*"]

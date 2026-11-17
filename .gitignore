@@ -1,0 +1,21 @@
+# KiCad's local files
+*.kicad_prl
+*.lck
+*-backups/
+_autosave-*
+fp-info-cache
+~*
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+/software/build/
+.venv/
+# what building the firmware writes, and where "make install" puts the image (it holds code of Infineon's SDK)
+/firmware/build/
+/software/logicboole/data/firmware.img
+# what building and simulating the FPGA's design write
+/gateware/build/
+/gateware/sim/build/
+# macOS
+.DS_Store

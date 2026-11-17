@@ -1,0 +1,545 @@
+(kicad_sch
+	(version 20260306)
+	(generator "eeschema")
+	(generator_version "10.0")
+	(uuid "3c9334ed-4aca-574e-9e3a-339be6bb19b4")
+	(paper "A3")
+	(title_block
+		(title "Logic Boole 16 - 16-channel logic analyzer, USB 3, Raspberry Pi HAT+")
+		(date "2026-10-20")
+		(rev "C")
+		(comment 1 "© 2026 Michael Walker")
+		(comment 2 "Licensed under CERN-OHL-S v2 (ohwr.org/cern_ohl_s_v2.txt)")
+	)
+	(lib_symbols)
+	(text "5  Pod A: eight input channels (probe pin -> divider -> comparator)"
+		(exclude_from_sim no)
+		(at 303 130.5 0)
+		(effects
+			(font
+				(face "Courier New")
+				(size 1.5 1.5)
+			)
+			(justify left top)
+		)
+		(uuid "02344d08-b73b-5486-9c53-90878fff76e4")
+	)
+	(text "7  Thresholds (2.5 V reference, PWM, filters, buffers), input clamp rail, trigger in / out"
+		(exclude_from_sim no)
+		(at 303 178.5 0)
+		(effects
+			(font
+				(face "Courier New")
+				(size 1.5 1.5)
+			)
+			(justify left top)
+		)
+		(uuid "1d19506c-ff30-5cd6-bf1d-0beb925167be")
+	)
+	(text "8  Raspberry Pi HAT+: 40-pin stacking header, ID EEPROM, optional Pi bus jumpers, mounting holes, fiducials"
+		(exclude_from_sim no)
+		(at 303 202.5 0)
+		(effects
+			(font
+				(face "Courier New")
+				(size 1.5 1.5)
+			)
+			(justify left top)
+		)
+		(uuid "2ea649b1-9ccf-56f8-9651-90dbf32ae329")
+	)
+	(text "3  USB 3 controller: Infineon EZ-USB FX3 (CYUSB3014-BZXI)"
+		(exclude_from_sim no)
+		(at 303 82.5 0)
+		(effects
+			(font
+				(face "Courier New")
+				(size 1.5 1.5)
+			)
+			(justify left top)
+		)
+		(uuid "412b9808-4fbe-5999-a530-0891beac5e9e")
+	)
+	(text "6  Pod B: eight input channels (probe pin -> divider -> comparator)"
+		(exclude_from_sim no)
+		(at 303 154.5 0)
+		(effects
+			(font
+				(face "Courier New")
+				(size 1.5 1.5)
+			)
+			(justify left top)
+		)
+		(uuid "45a8df92-329e-5ad6-9acb-1c6e9745743c")
+	)
+	(text "4  FPGA XC6SLX9-2TQG144C: configuration, clock, banks, supplies"
+		(exclude_from_sim no)
+		(at 303 106.5 0)
+		(effects
+			(font
+				(face "Courier New")
+				(size 1.5 1.5)
+			)
+			(justify left top)
+		)
+		(uuid "4a910295-500c-5c67-8adc-2078298b1f5f")
+	)
+	(text "Sheets: 1 power - 2 USB-C - 3 FX3 - 4 FPGA - 5 pod A - 6 pod B - 7 thresholds, clamp rail and trigger - 8 Raspberry Pi HAT+"
+		(exclude_from_sim no)
+		(at 15 68.3 0)
+		(effects
+			(font
+				(face "Courier New")
+				(size 1.6 1.6)
+			)
+			(justify left top)
+		)
+		(uuid "61809b95-a8e0-50b6-8412-40599bfe3e22")
+	)
+	(text "  Pod A 8 ch --+                                             GPIF II, 32 bit, 100 MHz, 1.8 V\n  Pod B 8 ch --+--> 5:1 divider -> TLV3502 comparator --> XC6SLX9-2TQG144C <=================> FX3 (CYUSB3014) --> orientation switch --> USB-C\n  threshold per pod: FPGA PWM -> 2.5 V reference -> filter -> buffer --+  ^  ^   slave-serial configuration, I2C       |  USB 2.0 ------------+\n  TRIG IN / TRIG OUT (3-pin header) -------------------------------------+  |                                          +-- 19.2 MHz crystal\n  24 MHz oscillator (timebase) ----------------------------------------------+   Pi I2C / SPI / UART (optional jumpers) <-- 40-pin stacking header"
+		(exclude_from_sim no)
+		(at 15 37.4 0)
+		(effects
+			(font
+				(face "Courier New")
+				(size 1.6 1.6)
+			)
+			(justify left top)
+		)
+		(uuid "776dea00-ea4d-5055-ba15-482b6dfb9230")
+	)
+	(text "  USB-C VBUS --+--> ideal diodes --> +5V --> 3.3 V and 1.2 V bucks (on while the Pi's 3.3 V or VBUS is present) --> 1.8 V LDO\n  Pi 5 V ------+                                                                 HAT+ ID EEPROM (0x51, Stackable) on ID_SD / ID_SC"
+		(exclude_from_sim no)
+		(at 15 56.9 0)
+		(effects
+			(font
+				(face "Courier New")
+				(size 1.6 1.6)
+			)
+			(justify left top)
+		)
+		(uuid "781d1544-1532-5423-89d2-d07101299be3")
+	)
+	(text "16-channel, 200 MS/s digital logic analyzer, revision C - USB 3 to a PC, or a Raspberry Pi HAT+ that streams to the Pi over a short USB cable\n-----------------------------------------------------------------------------------------------------------------------------------------"
+		(exclude_from_sim no)
+		(at 15 26 0)
+		(effects
+			(font
+				(face "Courier New")
+				(size 1.6 1.6)
+			)
+			(justify left top)
+		)
+		(uuid "9a4d4cc9-5aa8-52ab-827f-8162b210eebd")
+	)
+	(text "2  USB-C: receptacle, ESD, orientation detect, SuperSpeed orientation switch"
+		(exclude_from_sim no)
+		(at 303 58.5 0)
+		(effects
+			(font
+				(face "Courier New")
+				(size 1.5 1.5)
+			)
+			(justify left top)
+		)
+		(uuid "a402ff67-26ab-537d-9529-f14d39f2156c")
+	)
+	(text "Logic Boole 16 - 16-channel logic analyzer, USB 3, Raspberry Pi HAT+"
+		(exclude_from_sim no)
+		(at 15 12 0)
+		(effects
+			(font
+				(face "Courier New")
+				(size 3 3)
+				(bold yes)
+			)
+			(justify left top)
+		)
+		(uuid "ea450540-518e-5326-a668-934c105fa0b8")
+	)
+	(text "1  Power: USB-C VBUS and the Pi's 5 V through ideal diodes, standby enable, 3.3 / 1.8 / 1.2 V rails"
+		(exclude_from_sim no)
+		(at 303 34.5 0)
+		(effects
+			(font
+				(face "Courier New")
+				(size 1.5 1.5)
+			)
+			(justify left top)
+		)
+		(uuid "ed4cd5ae-3657-5daf-8d64-91d64e0bb73a")
+	)
+	(sheet
+		(at 300 198)
+		(size 100 12)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 255 255 225 1)
+		)
+		(uuid "30c206aa-9597-58c9-892f-d0844fdf7a92")
+		(property "Sheetname" "Pi_HAT"
+			(at 300 197.2 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.6 1.6)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "logic-boole-16_hat.kicad_sch"
+			(at 300 210.6 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project "logic-boole-16"
+				(path "/3c9334ed-4aca-574e-9e3a-339be6bb19b4"
+					(page "9")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 300 126)
+		(size 100 12)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 255 255 225 1)
+		)
+		(uuid "55fdba76-a5cf-52f5-9418-b06c466cc5be")
+		(property "Sheetname" "Pod_A"
+			(at 300 125.2 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.6 1.6)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "logic-boole-16_pod_a.kicad_sch"
+			(at 300 138.6 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project "logic-boole-16"
+				(path "/3c9334ed-4aca-574e-9e3a-339be6bb19b4"
+					(page "6")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 300 30)
+		(size 100 12)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 255 255 225 1)
+		)
+		(uuid "58b3d09a-62f0-5571-a792-1a6d5e5676e2")
+		(property "Sheetname" "Power"
+			(at 300 29.2 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.6 1.6)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "logic-boole-16_power.kicad_sch"
+			(at 300 42.6 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project "logic-boole-16"
+				(path "/3c9334ed-4aca-574e-9e3a-339be6bb19b4"
+					(page "2")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 300 150)
+		(size 100 12)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 255 255 225 1)
+		)
+		(uuid "7ca45d41-fa4f-54ec-8fc3-0a3952547b0f")
+		(property "Sheetname" "Pod_B"
+			(at 300 149.2 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.6 1.6)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "logic-boole-16_pod_b.kicad_sch"
+			(at 300 162.6 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project "logic-boole-16"
+				(path "/3c9334ed-4aca-574e-9e3a-339be6bb19b4"
+					(page "7")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 300 78)
+		(size 100 12)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 255 255 225 1)
+		)
+		(uuid "cebdb18e-f274-5724-b887-ff34855e3c94")
+		(property "Sheetname" "FX3"
+			(at 300 77.2 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.6 1.6)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "logic-boole-16_fx3.kicad_sch"
+			(at 300 90.6 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project "logic-boole-16"
+				(path "/3c9334ed-4aca-574e-9e3a-339be6bb19b4"
+					(page "4")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 300 174)
+		(size 100 12)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 255 255 225 1)
+		)
+		(uuid "d91c7bf2-0197-515e-b439-825b92a7c3fa")
+		(property "Sheetname" "Thresholds_Trigger"
+			(at 300 173.2 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.6 1.6)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "logic-boole-16_misc.kicad_sch"
+			(at 300 186.6 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project "logic-boole-16"
+				(path "/3c9334ed-4aca-574e-9e3a-339be6bb19b4"
+					(page "8")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 300 102)
+		(size 100 12)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 255 255 225 1)
+		)
+		(uuid "ee34d445-c5d8-5f60-9a5a-cada78545726")
+		(property "Sheetname" "FPGA"
+			(at 300 101.2 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.6 1.6)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "logic-boole-16_fpga.kicad_sch"
+			(at 300 114.6 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project "logic-boole-16"
+				(path "/3c9334ed-4aca-574e-9e3a-339be6bb19b4"
+					(page "5")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 300 54)
+		(size 100 12)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 255 255 225 1)
+		)
+		(uuid "f5218dfc-b4d7-543f-8b12-8e2de4897d80")
+		(property "Sheetname" "USB"
+			(at 300 53.2 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.6 1.6)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "logic-boole-16_usb.kicad_sch"
+			(at 300 66.6 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project "logic-boole-16"
+				(path "/3c9334ed-4aca-574e-9e3a-339be6bb19b4"
+					(page "3")
+				)
+			)
+		)
+	)
+	(sheet_instances
+		(path "/"
+			(page "1")
+		)
+	)
+)

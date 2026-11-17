@@ -1,0 +1,4 @@
+(sym_lib_table
+	(version 7)
+	(lib (name "logic-boole-16")(type "KiCad")(uri "${KIPRJMOD}/logic-boole-16.kicad_sym")(options "")(descr "logic-boole-16 project symbols"))
+)

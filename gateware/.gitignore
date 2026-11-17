@@ -1,0 +1,8 @@
+# What build.sh writes (build/) and what sim.sh writes (sim/build/)
+build/
+# Simulator outputs
+*.vvp
+*.vcd
+*.fst
+*.lxt
+*.lxt2

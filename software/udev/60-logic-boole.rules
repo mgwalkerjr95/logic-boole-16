@@ -1,0 +1,14 @@
+# Copyright (C) 2026 Michael Walker
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Logic Boole 16: lets the person at the computer, and the members of the group plugdev, open the board on USB.
+# Without this rule Linux gives a USB device to root alone.
+#
+#     sudo cp 60-logic-boole.rules /etc/udev/rules.d/
+#     sudo udevadm control --reload
+#     sudo udevadm trigger
+#
+# The FX3's boot loader, as the board is after being plugged in:
+SUBSYSTEM=="usb", ATTR{idVendor}=="04b4", ATTR{idProduct}=="00f3", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+# The firmware, once the computer has loaded it:
+SUBSYSTEM=="usb", ATTR{idVendor}=="04b4", ATTR{idProduct}=="00f1", MODE="0660", GROUP="plugdev", TAG+="uaccess"

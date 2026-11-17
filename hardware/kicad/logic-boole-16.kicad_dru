@@ -1,0 +1,87 @@
+(version 1)
+# Logic Boole 16, revision C: custom design rules.  Board minima (JLCPCB multilayer) are in the board setup; the rules below add
+# the interface constraints.  Trace geometry is for JLCPCB's JLC04161H-3313 stack-up (F.Cu over the
+# In1 ground plane, B.Cu over the In2 power planes, both 0.0994 mm away).
+
+# ---------------------------------------------------------------- fabrication (JLCPCB)
+(rule "JLC board edge clearance"
+	(constraint edge_clearance (min 0.3mm)))
+(rule "JLC plated hole to hole"
+	(condition "A.Type == 'Pad' && B.Type == 'Pad'")
+	(constraint hole_to_hole (min 0.45mm)))
+(rule "JLC plated pad hole to copper"
+	(condition "A.Type == 'Pad' && A.Pad_Type == 'Through-hole'")
+	(constraint hole_clearance (min 0.28mm)))
+(rule "JLC npth to copper"
+	(condition "A.Pad_Type == 'NPTH, mechanical'")
+	(constraint hole_clearance (min 0.25mm)))
+# footprint-internal geometry, as the manufacturers draw it: the receptacle's shell legs sit 0.298 mm from its own
+# locating pegs (Amphenol 12401610E4-2A land pattern), and the mounting holes' stitching vias are part of one GND pad
+(rule "USB-C receptacle: shell legs to its own pegs"
+	(condition "A.memberOfFootprint('J1') && B.memberOfFootprint('J1')")
+	(constraint edge_clearance (min 0.25mm)))
+(rule "mounting hole stitching vias"
+	(condition "A.memberOfFootprint('H*') && B.memberOfFootprint('H*') && A.Net == B.Net")
+	(constraint hole_to_hole (min 0.2mm)))
+
+# ---------------------------------------------------------------- USB 3 SuperSpeed: 90 ohm edge-coupled pairs
+(rule "USB3 pairs"
+	(condition "A.NetClass == 'USB3'")
+	(constraint track_width (min 0.10mm) (opt 0.145mm) (max 0.16mm))
+	(constraint diff_pair_gap (min 0.10mm) (opt 0.15mm)))
+(rule "USB3 intra-pair skew"
+	(condition "A.NetClass == 'USB3'")
+	(constraint skew (max 0.1mm) (within_diff_pairs)))
+(rule "USB3 length"
+	(condition "A.NetClass == 'USB3'")
+	(constraint length (max 40mm)))
+(rule "USB3 pair clearance"
+	(condition "A.NetClass == 'USB3' && A.Type == 'Track' && B.Type == 'Track' && !A.inDiffPair('*')")
+	(constraint clearance (min 0.3mm)))
+
+# ---------------------------------------------------------------- USB 2.0: one 90 ohm pair from the receptacle to the FX3
+# No skew rule here: both nets branch to the receptacle's two rows, and D- crosses under D+ (three vias), so KiCad's
+# whole-net lengths say nothing about the signal path.  The layout matches the path from the FX3 to the A row
+# (via barrels included) to 1.27 mm (50 mil, TI TUSB8020B layout guide; TI SPRABT8 allows 150 mil).
+(rule "USB2 pair"
+	(condition "A.NetClass == 'USB2'")
+	(constraint track_width (min 0.10mm) (opt 0.145mm) (max 0.16mm)))
+(rule "USB2 length"
+	(condition "A.NetClass == 'USB2'")
+	(constraint length (max 60mm)))
+
+# ---------------------------------------------------------------- GPIF II, 32 bits at 100 MHz, 1.8 V, no series resistors:
+# Simulation covered up to 50 mm of 50 ohm line at low drive strength.  Timing (FX3 datasheet 001-52136 Rev. *R,
+# table 9): reading, data is valid from tCO 8 ns (max) to tDOH 2 ns (min) after the edge, a 4 ns window; writing, the
+# FX3 needs tDS 2 ns / tDH 0.5 ns.  The common delay is taken up by the FPGA's PLL phase; what eats the window is the
+# spread between lines: 40 mm = 0.24 ns, 6 % of the read window.
+(rule "GPIF length"
+	(condition "A.NetClass == 'GPIF'")
+	(constraint length (max 50mm)))
+(rule "GPIF matched"
+	(condition "A.NetClass == 'GPIF'")
+	(constraint skew (max 40mm)))
+(rule "GPIF width"
+	(condition "A.NetClass == 'GPIF'")
+	(constraint track_width (min 0.10mm) (opt 0.12mm) (max 0.16mm)))
+
+# ---------------------------------------------------------------- comparator outputs (5.9 ps/mm): the routing share of the
+# channel-to-channel skew budget was 100 ps = 17 mm (200 ps since).  No skew rule here: what has to match is
+# each channel's whole path, the track from R_in to its cell (INS_xx, 4 ... 12 mm: the pods do not line up with their
+# cells) plus this output, and KiCad's rule sees one net at a time.  The outputs meander so that
+# every path is within 13 mm of the longest.
+(rule "channel output width"
+	(condition "A.NetClass == 'CH_OUT'")
+	(constraint track_width (min 0.10mm) (opt 0.12mm) (max 0.17mm)))
+
+# ---------------------------------------------------------------- 1 Mohm input nodes (probe pin, divider)
+(rule "high-impedance input spacing"
+	(condition "A.NetClass == 'HIZ' && B.NetClass != 'HIZ' && A.Type == 'Track' && B.Type == 'Track'")
+	(constraint clearance (min 0.2mm)))
+
+# ---------------------------------------------------------------- Tag-Connect TC2050 footprints (JTAG, J2 and J4)
+# No other copper within .02 in of a contact pad (Tag-Connect's TC2050-IDC-FP drawing, note 3); the pads' own
+# neighbours are 0.48 mm apart, as Tag-Connect draws them.  Last, so that no other clearance rule overrides it
+(rule "Tag-Connect contact pads"
+	(condition "A.Type == 'Pad' && A.Pad_Type != 'NPTH, mechanical' && (A.memberOfFootprint('J2') || A.memberOfFootprint('J4')) && !(B.memberOfFootprint('J2') || B.memberOfFootprint('J4'))")
+	(constraint clearance (min 0.508mm)))
