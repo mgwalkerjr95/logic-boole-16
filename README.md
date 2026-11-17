@@ -9,7 +9,7 @@ It runs from one USB-C cable on a computer, or sits on a Raspberry Pi 4 or 5 as 
 [![Software: GPL-3.0-or-later](https://img.shields.io/badge/software-GPL--3.0--or--later-2ea44f)](software/LICENSE)
 [![Firmware: MIT](https://img.shields.io/badge/firmware-MIT-2ea44f)](firmware/LICENSE)
 [![Board: revision C](https://img.shields.io/badge/board-revision_C-1f6feb)](hardware/)
-[![Hosts: macOS and Linux](https://img.shields.io/badge/hosts-macOS_%7C_Linux-6e7781)](#what-has-been-tested)
+[![Hosts: macOS and Linux](https://img.shields.io/badge/hosts-macOS_%7C_Linux-6e7781)](#get-started)
 
 <img src="docs/images/board.png" width="640" alt="The Logic Boole 16 board: two 16-pin pod connectors at the front, the FPGA in the middle, USB-C on the right and the 40-pin Raspberry Pi header at the back">
 
@@ -122,21 +122,6 @@ The [datasheet](docs/datasheet.pdf) has the full tables, the pins, the dimension
 | Power | 5 V from USB-C or the Pi's header, about 1 W |
 | Size | 82 × 86 mm, four layers, parts on the top side only |
 | Main parts | Spartan-6 XC6SLX9 FPGA, Infineon EZ-USB FX3, 16 fast comparators |
-
-## What has been tested
-
-These are the first five boards, and the documents say only what has been built and measured.
-[Section 13 of the datasheet](docs/datasheet.pdf) lists every measurement with the board it was made on.
-
-| What | Where it stands |
-|---|---|
-| ✅ Measured on the first boards | 200 MS/s on all 16 inputs, clocks to 85 MHz, thresholds, triggers, the glitch filter, the capture clock, the trigger header, USB 3 and USB 2.0, and a self-test that compares every word of 34 captures |
-| ✅ macOS | The current software was tested from a Mac laptop |
-| 🟡 Raspberry Pi OS | An earlier version of the software ran on a Pi 5 (64-bit). The current one has not been run there yet |
-| 🟡 Linux on a PC | Written for it. Not run yet |
-| 🟡 The Pi's own bus lines | In the FPGA design and simulated. Not yet run on a board |
-| 🟡 By design, not yet tested | ±25 V on the inputs, electrostatic discharge, logic below 3.3 V |
-| ❌ Windows | The software does not run on Windows |
 
 ## Documentation
 
