@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<!-- Copyright (C) 2026 Michael Walker -->
+<!-- SPDX-License-Identifier: CERN-OHL-S-2.0 -->
+<!-- The banner at the top of the repository's README.  banner.png is this page as a picture: headless Google
+     Chrome from this folder, with the options headless=new, hide-scrollbars, window-size=1000,340,
+     force-device-scale-factor=2, virtual-time-budget=5000 and screenshot=banner.png. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Logic Boole 16: banner</title>
+<link rel="stylesheet" href="../datasheet/fonts/fonts.css">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { width: 1000px; height: 340px; overflow: hidden; background: #e8e1cf; color: #20231c; position: relative;
+         font-family: "Archivo", "Helvetica Neue", Arial, sans-serif; }
+  .band { height: 46px; background: #46553a; color: #f2eddd; display: flex; align-items: center; justify-content: space-between;
+          padding: 0 36px; font: 700 14px "Courier Prime", "Courier New", monospace; }
+  .band span:last-child { font-weight: 400; color: #c9d2ba; }
+  .name { position: absolute; left: 36px; top: 76px; font: 700 76px/0.95 "Archivo Narrow", "Arial Narrow", sans-serif;
+          text-transform: uppercase; letter-spacing: .01em; }
+  .line { position: absolute; left: 36px; top: 158px; width: 500px; font-size: 19px; line-height: 1.4; }
+  .figs { position: absolute; left: 36px; bottom: 30px; display: flex; gap: 0; border-top: 2px solid #20231c; }
+  .fig { padding: 10px 26px 0 0; margin-right: 26px; border-right: 1px dotted #4a4d40; }
+  .fig:last-child { border-right: 0; margin-right: 0; padding-right: 0; }
+  .fig b { display: block; font: 700 34px/1 "Archivo Narrow", "Arial Narrow", sans-serif; text-transform: uppercase; }
+  .fig b small { font-size: 19px; margin-left: 3px; text-transform: none; }
+  .fig i { display: block; font-size: 13.5px; color: #4a4d40; margin-top: 3px; }
+  .well { position: absolute; right: 0; top: 46px; bottom: 0; width: 410px; background: #d2c9b0; }
+  .board { position: absolute; right: 14px; top: 58px; width: 392px; }
+</style>
+</head>
+<body>
+<div class="band"><span>Open hardware &middot; open software</span><span>Board revision C</span></div>
+<div class="well"></div>
+<div class="name">Logic Boole 16</div>
+<div class="line">A 16-channel logic analyzer on USB 3, for a computer or a Raspberry Pi.</div>
+<div class="figs">
+  <div class="fig"><b>200<small>MS/s</small></b><i>on 16 channels</i></div>
+  <div class="fig"><b>0.3&ndash;3<small>V</small></b><i>a threshold for each pod</i></div>
+  <div class="fig"><b>USB-C</b><i>one cable, power and data</i></div>
+</div>
+<img class="board" src="board.png" alt="">
+</body>
+</html>

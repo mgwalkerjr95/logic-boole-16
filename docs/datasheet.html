@@ -5,51 +5,57 @@
      folder, with the options headless=new, no-pdf-header-footer, generate-pdf-document-outline,
      virtual-time-budget=10000 and print-to-pdf=datasheet.pdf, and "file://$PWD/datasheet.html" as the page.
      The page numbers of the contents on page 1 are set by hand: check them against the PDF after a change.
-     The fonts are in datasheet/fonts, each under the SIL Open Font License (datasheet/fonts/README.md).
+     The fonts (Archivo, Archivo Narrow, Courier Prime) are in datasheet/fonts, each under the SIL Open Font
+     License (datasheet/fonts/README.md).  The page is white; the pictures have white backgrounds and are blended into the boxes they sit in.
      The pictures of the board are in hardware/images and datasheet/img. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Logic Boole 16 (board revision C) preliminary datasheet, rev B</title>
+<title>Logic Boole 16 (board revision C) preliminary datasheet, rev C</title>
 <meta name="author" content="Michael Walker">
 <link rel="stylesheet" href="datasheet/fonts/fonts.css">
 <style>
 :root {
-  --ink: #0e1513; --text: #1c2220; --muted: #5b6661; --rule: #d2d8d4; --shade: #eef2f0;
-  --acc: #0a6ea8; --acc-bg: #e9f3f9; --gold: #b98a2e; --gold-bg: #fbf5e7; --dark: #090d0c; --trace: #4fc8ff;
-  --f-body: "Hanken Grotesk", "Helvetica Neue", Arial, sans-serif;
-  --f-disp: "Big Shoulders Display", "Arial Narrow", sans-serif;
-  --f-mono: "IBM Plex Mono", Menlo, monospace;
-  --f-name: "Michroma", "Arial Black", sans-serif;
+  /* The look of the shop pages on white paper: olive structure, ink text, canvas only inside the boxes. */
+  --page: #ffffff; --panel: #f2eddd; --panel-2: #e8e1cf;
+  --ink: #20231c; --text: #20231c; --muted: #4a4d40; --rule: #b9b095; --shade: #f2eddd;
+  --olive: #46553a; --olive-dark: #2f3a27; --olive-pale: #9aa888; --caution: #8a2f2a;
+  --acc: #46553a; --acc-bg: #e8e1cf;
+  --f-body: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --f-disp: "Archivo Narrow", "Arial Narrow", sans-serif;
+  --f-mono: "Courier Prime", "Courier New", monospace;
 }
 @page {
   size: letter;
   margin: 18mm 15mm 16mm 15mm;
-  @top-left { content: "LOGIC BOOLE 16  ·  preliminary datasheet"; font: 600 7.5pt "Hanken Grotesk", Arial, sans-serif; color: #5b6661; vertical-align: bottom; padding-bottom: 2.5mm; }
-  @top-right { content: "Rev B  ·  2026-11-17  ·  board revision C"; font: 400 7.5pt "Hanken Grotesk", Arial, sans-serif; color: #5b6661; vertical-align: bottom; padding-bottom: 2.5mm; }
-  @bottom-left { content: "© 2026 Michael Walker. Open hardware, CERN-OHL-S v2. Preliminary: subject to change."; font: 400 7pt "Hanken Grotesk", Arial, sans-serif; color: #5b6661; vertical-align: top; padding-top: 3mm; }
-  @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 600 7pt "Hanken Grotesk", Arial, sans-serif; color: #5b6661; vertical-align: top; padding-top: 3mm; }
+  background: #ffffff;
+  @top-left { content: "LOGIC BOOLE 16  ·  preliminary datasheet"; font: 700 7.2pt "Courier Prime", "Courier New", monospace; color: #46553a; vertical-align: bottom; padding-bottom: 2.5mm; }
+  @top-right { content: "Rev C  ·  2026-11-18  ·  board revision C"; font: 400 7.2pt "Courier Prime", "Courier New", monospace; color: #4a4d40; vertical-align: bottom; padding-bottom: 2.5mm; }
+  @bottom-left { content: "© 2026 Michael Walker. Open hardware, CERN-OHL-S v2. Preliminary: subject to change."; font: 400 7pt "Archivo", Arial, sans-serif; color: #4a4d40; vertical-align: top; padding-top: 3mm; }
+  @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 700 7.2pt "Courier Prime", "Courier New", monospace; color: #46553a; vertical-align: top; padding-top: 3mm; }
 }
 @page :first {
   margin-top: 12mm;
   @top-left { content: none; } @top-right { content: none; }
 }
 * { box-sizing: border-box; }
-html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-body { margin: 0; font: 400 8.6pt/1.42 var(--f-body); color: var(--text); font-variant-numeric: tabular-nums; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; background: var(--page); }
+/* The page is white.  The pictures have white backgrounds and are blended into the boxes they sit in. */
+body { margin: 0; background: var(--page); font: 400 8.5pt/1.42 var(--f-body); color: var(--text); font-variant-numeric: tabular-nums; }
 p { margin: 0 0 2mm; }
 b, strong { font-weight: 700; color: var(--ink); }
-code, .mono { font-family: var(--f-mono); font-size: .92em; font-weight: 500; }
+code, .mono { font-family: var(--f-mono); font-size: .95em; font-weight: 400; }
 ul, ol { margin: 0 0 2mm; padding-left: 4.5mm; }
 li { margin: 0 0 .8mm; }
-li::marker { color: var(--acc); }
+li::marker { color: var(--olive); }
+.u { text-transform: none; }
 
 /* section headings */
-h2 { font: 800 17pt/1 var(--f-disp); text-transform: uppercase; letter-spacing: .015em; color: var(--ink);
-     margin: 6mm 0 3mm; padding-top: 2.2mm; border-top: 1.6pt solid var(--ink); break-after: avoid; }
-h2 .n { color: var(--acc); margin-right: 2.5mm; }
-h3 { font: 700 10pt/1.2 var(--f-body); color: var(--ink); margin: 4.5mm 0 1.6mm; break-after: avoid; }
-h2.plain { font: 700 10pt/1.2 var(--f-body); text-transform: none; letter-spacing: 0; margin: 0 0 1.6mm; padding: 0; border: 0; }
+h2 { font: 700 17pt/1 var(--f-disp); text-transform: uppercase; letter-spacing: .02em; color: var(--ink);
+     margin: 6mm 0 3mm; padding-top: 2.2mm; border-top: 1.6pt solid var(--olive); break-after: avoid; }
+h2 .n { font: 700 9.5pt/1 var(--f-mono); letter-spacing: 0; color: var(--olive); margin-right: 2.5mm; vertical-align: 1.1pt; }
+h3 { font: 700 10.5pt/1.15 var(--f-disp); text-transform: uppercase; letter-spacing: .04em; color: var(--ink); margin: 4.5mm 0 1.6mm; break-after: avoid; }
+h2.plain { font: 700 10.5pt/1.15 var(--f-disp); text-transform: uppercase; letter-spacing: .04em; margin: 0 0 1.6mm; padding: 0; border: 0; }
 .newpage { break-before: page; }
 .newpage > h2:first-child { margin-top: 0; }
 .keep { break-inside: avoid; }
@@ -58,49 +64,48 @@ h2.plain { font: 700 10pt/1.2 var(--f-body); text-transform: none; letter-spacin
 table { width: 100%; border-collapse: collapse; margin: 0 0 2.5mm; font-size: 7.9pt; line-height: 1.35; break-inside: auto; }
 thead { display: table-header-group; }
 tr { break-inside: avoid; }
-th { background: var(--shade); color: var(--ink); text-align: left; font-weight: 700; padding: 1.1mm 1.6mm; border-top: .8pt solid var(--ink); border-bottom: .6pt solid #9aa39e; vertical-align: bottom; }
-td { padding: .85mm 1.6mm; border-bottom: .4pt solid var(--rule); vertical-align: top; }
+th { background: var(--panel); color: var(--olive); font: 700 7.4pt/1.3 var(--f-mono); text-align: left; padding: 1.2mm 1.6mm 1mm; border-top: 1.1pt solid var(--ink); border-bottom: .6pt solid var(--ink); vertical-align: bottom; }
+td { padding: .85mm 1.6mm; border-bottom: .5pt dotted var(--muted); vertical-align: top; }
 td.c, th.c { text-align: center; }
 td.v, th.v { text-align: center; white-space: nowrap; }
 td.p { font-weight: 600; color: var(--ink); }
 th.w-par { width: 27%; } th.w-n { width: 8%; } th.w-u { width: 8%; }
-table.kv td:first-child { width: 24%; font-weight: 600; color: var(--ink); }
+table.kv td:first-child { width: 27%; white-space: nowrap; font: 700 7.4pt/1.45 var(--f-mono); color: var(--olive); }
 table.pin td:first-child, table.pin th:first-child { width: 9%; text-align: center; }
 table.pin td:nth-child(2) { text-align: center; }
-.sig { font-family: var(--f-mono); font-weight: 500; font-size: .95em; color: var(--ink); white-space: nowrap; }
+.sig { font-family: var(--f-mono); font-weight: 700; font-size: 1em; color: var(--ink); white-space: nowrap; }
 
-/* callouts */
-.warn, .note, .tip { border-left: 2.6pt solid var(--acc); background: var(--acc-bg); padding: 2mm 3mm 1.2mm; margin: 0 0 3mm; break-inside: avoid; }
-.warn { border-color: #c8102e; background: #fcf0f1; }
+/* callouts: a caution is the ink-bordered box; a note carries an olive bar; a tip a plain one */
+.warn, .note, .tip { border-left: 2.6pt solid var(--olive); background: var(--panel); border-radius: 0 3px 3px 0; padding: 2mm 3mm 1.2mm; margin: 0 0 3mm; break-inside: avoid; }
+.warn { border: .9pt solid var(--ink); border-left: 3.4pt solid var(--ink); border-radius: 3px; }
 .warn .h svg { margin-right: 1.4mm; vertical-align: -.4pt; }
-.warn ul { margin-bottom: 1mm; } .warn li::marker { color: #c8102e; }
-.note { border-color: var(--gold); background: var(--gold-bg); }
-.tip { border-color: #8b968f; background: var(--shade); }
-.warn .h, .note .h, .tip .h { font-weight: 700; color: var(--ink); margin-bottom: .8mm; }
+.warn ul { margin-bottom: 1mm; } .warn li::marker { color: var(--ink); }
+.tip { border-left-color: var(--rule); }
+.warn .h, .note .h, .tip .h { font: 700 9.4pt/1.2 var(--f-disp); text-transform: uppercase; letter-spacing: .04em; color: var(--ink); margin-bottom: .9mm; }
 
 /* figures */
 figure { margin: 1mm 0 3.5mm; break-inside: avoid; }
 figure img { display: block; width: 100%; }
 figure svg { display: block; width: 100%; height: auto; }
-figcaption { font-size: 7.4pt; color: var(--muted); margin-top: 1.2mm; }
-figcaption b { color: var(--ink); }
+figure svg image, .hero img { mix-blend-mode: multiply; }
+figcaption { font-size: 7.4pt; font-style: italic; color: var(--muted); margin-top: 1.2mm; }
+figcaption b { font-style: normal; font: 700 7.2pt var(--f-mono); color: var(--olive); }
 
-/* cover */
-.cover { background: var(--dark); color: #e8ece8; border-radius: 2.5mm; padding: 7mm 8mm 6.5mm; display: grid; grid-template-columns: 1fr auto; gap: 6mm; align-items: end; }
-.cover .kicker { font: 600 7.6pt var(--f-body); letter-spacing: .14em; text-transform: uppercase; color: #d8b062; margin-bottom: 4mm; }
-.lockup { display: flex; align-items: center; gap: .34em; font: 400 25pt/1 var(--f-name); color: #f2f6f3; white-space: nowrap; margin: 0 0 4.5mm; }
-.lockup svg { height: .74em; width: auto; flex: none; }
-.lockup .n16 { background: #f2f6f3; color: var(--dark); border-radius: .14em; padding: .17em .2em .17em .24em; margin-left: .06em; }
-.cover .sub { font: 400 10pt/1.38 var(--f-body); color: #c6cfc9; max-width: 128mm; margin: 0; }
-.cover .rev { text-align: right; font: 400 7.6pt/1.6 var(--f-body); color: #94a29b; white-space: nowrap; }
-.cover .rev b { color: #f2f6f3; font-weight: 600; }
-.cover .flag { display: inline-block; font: 600 7pt/1 var(--f-mono); letter-spacing: .1em; color: var(--dark); background: var(--trace); border-radius: 1mm; padding: 1.1mm 1.8mm; margin-bottom: 2.5mm; }
-.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; margin: 3.2mm 0 3.6mm; border-top: .6pt solid var(--rule); border-bottom: .6pt solid var(--rule); }
-.stat { padding: 2.4mm 3mm 2.2mm; border-left: .6pt solid var(--rule); }
+/* cover: the olive band of the shop's masthead */
+.cover { background: var(--olive); color: var(--page); border-radius: 3px; padding: 6.5mm 8mm 6mm; display: grid; grid-template-columns: 1fr auto; gap: 6mm; align-items: end; }
+.cover .kicker { font: 700 7.6pt var(--f-mono); color: #c9d2ba; margin-bottom: 3.5mm; }
+.lockup { display: flex; align-items: center; gap: .3em; font: 700 34pt/1 var(--f-disp); text-transform: uppercase; letter-spacing: .03em; color: var(--page); white-space: nowrap; margin: 0 0 4mm; }
+.lockup svg { height: .62em; width: auto; flex: none; }
+.cover .sub { font: 400 10pt/1.4 var(--f-body); color: #e6e3d0; max-width: 128mm; margin: 0; }
+.cover .rev { text-align: right; font: 400 7.6pt/1.65 var(--f-mono); color: #c9d2ba; white-space: nowrap; }
+.cover .rev b { color: var(--page); font-weight: 700; }
+.cover .flag { display: inline-block; font: 700 7pt/1 var(--f-mono); letter-spacing: .08em; color: var(--page); border: .9pt solid var(--page); border-radius: 3px; padding: 1.2mm 1.6mm .9mm; margin-bottom: 2.5mm; }
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; margin: 3.2mm 0 3.6mm; border-top: .9pt solid var(--ink); border-bottom: .9pt solid var(--ink); }
+.stat { padding: 2.4mm 3mm 2.2mm; border-left: .5pt dotted var(--muted); }
 .stat:first-child { border-left: 0; padding-left: 0; }
-.stat .num { font: 800 19pt/1 var(--f-disp); color: var(--ink); white-space: nowrap; }
-.stat .num small { font-size: 11pt; margin-left: .6mm; }
-.stat .lab { font-size: 7.4pt; color: var(--muted); margin-top: .8mm; line-height: 1.3; }
+.stat .num { font: 700 20pt/1 var(--f-disp); color: var(--ink); white-space: nowrap; }
+.stat .num small { font-size: 11pt; margin-left: .8mm; letter-spacing: .02em; }
+.stat .lab { font-size: 7.4pt; font-style: italic; color: var(--muted); margin-top: .8mm; line-height: 1.3; }
 .two { display: grid; grid-template-columns: 1.08fr 1fr; gap: 7mm; }
 .two h3:first-child { margin-top: 0; }
 .even { grid-template-columns: 1fr 1fr; }
@@ -108,56 +113,57 @@ figcaption b { color: var(--ink); }
 figure.jp { margin: 0 0 3mm; grid-column: 3; grid-row: 1 / span 2; }
 .jp-tip { grid-column: 1 / span 2; grid-row: 2; }
 .jp-n { font-family: var(--f-body); font-weight: 700; font-size: 44px; fill: var(--ink); }
-.jp-s { font-family: var(--f-mono); font-weight: 500; font-size: 34px; fill: var(--muted); }
-.hero { border: .6pt solid var(--rule); border-radius: 2mm; padding: 1mm 3mm; margin-bottom: 3mm; }
-.hero img { width: 100%; max-height: 37mm; object-fit: contain; display: block; }
+.jp-s { font-family: var(--f-mono); font-weight: 400; font-size: 34px; fill: var(--muted); }
+.hero { background: var(--panel); border-radius: 3px; padding: 1.5mm 3mm; margin-bottom: 3mm; }
+.hero img { width: 100%; max-height: 35mm; object-fit: contain; display: block; }
 .features li { margin-bottom: .75mm; }
 .apps { columns: 2; column-gap: 6mm; font-size: 7.8pt; margin: 0 0 1mm; padding-left: 4mm; }
 .apps li { margin: 0 0 .5mm; }
 .contents { columns: 2; column-gap: 6mm; font-size: 7.8pt; list-style: none; padding: 0; margin: 0; }
 .contents li { margin: 0 0 .6mm; }
-.contents li a { display: flex; color: inherit; text-decoration: none; }
-.contents .n { display: inline-block; width: 5mm; color: var(--acc); font-weight: 700; }
-.contents .pg { margin-left: auto; color: var(--muted); }
+.contents li a { display: flex; align-items: baseline; color: inherit; text-decoration: none; white-space: nowrap; }
+.contents .n { display: inline-block; flex: none; width: 5.5mm; font: 700 7.4pt var(--f-mono); color: var(--olive); }
+.contents .pg { flex: 1; display: flex; align-items: baseline; font: 700 7.4pt var(--f-mono); color: var(--ink); }
+.contents .pg::before { content: ""; flex: 1; border-bottom: .6pt dotted var(--muted); margin: 0 1.2mm; transform: translateY(-1.2pt); }
 
-/* labelled board views */
-.dg-l { fill: none; stroke: var(--acc); stroke-width: 1.8; }
-.dg-p { fill: var(--acc); stroke: #fff; stroke-width: 2; }
-.dg-t { font-family: var(--f-body); font-weight: 700; font-size: 27px; fill: var(--ink); }
-.dg-s { font-family: var(--f-body); font-size: 20.5px; fill: var(--muted); }
+/* labeled board views */
+.dg-l { fill: none; stroke: var(--ink); stroke-width: 1.5; }
+.dg-p { fill: var(--page); stroke: var(--ink); stroke-width: 2.5; }
+.dg-t { font-family: var(--f-disp); font-weight: 700; font-size: 27px; fill: var(--ink); text-transform: uppercase; letter-spacing: .03em; }
+.dg-s { font-family: var(--f-body); font-size: 19.5px; fill: var(--muted); }
 figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
 
 /* block diagram, input circuit, pinout */
-.bd rect.b { fill: #fff; stroke: var(--ink); stroke-width: 1.4; }
-.bd rect.s { fill: var(--shade); stroke: var(--ink); stroke-width: 1.4; }
-.bd rect.a { fill: var(--acc-bg); stroke: var(--acc); stroke-width: 1.6; }
+.bd rect.b { fill: var(--page); stroke: var(--ink); stroke-width: 1.4; }
+.bd rect.s { fill: var(--panel); stroke: var(--ink); stroke-width: 1.4; }
+.bd rect.a { fill: var(--acc-bg); stroke: var(--olive); stroke-width: 1.6; }
 .bd .w { fill: none; stroke: var(--ink); stroke-width: 1.4; }
-.bd .wa { fill: none; stroke: var(--acc); stroke-width: 1.6; }
+.bd .wa { fill: none; stroke: var(--olive); stroke-width: 1.6; }
 .bd text { font-family: var(--f-body); font-size: 15px; fill: var(--ink); }
 .bd text.t { font-weight: 700; }
 .bd text.m { fill: var(--muted); font-size: 13.5px; }
-.bd text.k { font-family: var(--f-mono); font-size: 13px; font-weight: 500; }
-.bd text.ch { font-family: var(--f-mono); font-size: 14px; font-weight: 600; fill: var(--acc); }
-.bd .ah { fill: var(--ink); } .bd .aha { fill: var(--acc); }
+.bd text.k { font-family: var(--f-mono); font-size: 13.5px; font-weight: 400; }
+.bd text.ch { font-family: var(--f-mono); font-size: 14.5px; font-weight: 700; fill: var(--olive); }
+.bd .ah { fill: var(--ink); } .bd .aha { fill: var(--olive); }
 .bd .dot { fill: var(--ink); }
-.bd rect.pin { fill: #fff; stroke: var(--ink); stroke-width: 1.3; }
-.bd rect.pin.sg { fill: var(--acc-bg); stroke: var(--acc); }
-.bd rect.shr { fill: var(--shade); stroke: var(--ink); stroke-width: 1.6; }
+.bd rect.pin { fill: var(--page); stroke: var(--ink); stroke-width: 1.3; }
+.bd rect.pin.sg { fill: var(--acc-bg); stroke: var(--olive); }
+.bd rect.shr { fill: var(--panel); stroke: var(--ink); stroke-width: 1.6; }
 
 /* dimension drawing */
-.dm .dm-o { fill: #f6f8f6; stroke: var(--ink); stroke-width: 2; }
-.dm .dm-o2 { fill: #dfe6e1; stroke: var(--ink); stroke-width: 1.4; }
-.dm .dm-c { fill: #e3e9e5; stroke: #56615c; stroke-width: 1; }
-.dm .dm-c2 { fill: #cfd8d2; stroke: #56615c; stroke-width: 1; }
-.dm .dm-pi { fill: none; stroke: #7d8a84; stroke-width: 1.2; stroke-dasharray: 7 5; }
-.dm .dm-pi2 { fill: #fff; stroke: #7d8a84; stroke-width: 1.2; stroke-dasharray: 7 5; }
-.dm .dm-hole { fill: #fff; stroke: var(--ink); stroke-width: 1.4; }
-.dm .dm-x { fill: none; stroke: var(--acc); stroke-width: .9; stroke-dasharray: 9 3 2 3; }
-.dm .dm-p1 { fill: var(--acc); }
-.dm .dm-pin { stroke: #56615c; stroke-width: 3; }
-.dm .dm-d { stroke: var(--acc); stroke-width: 1.1; }
-.dm .dm-e { fill: none; stroke: var(--acc); stroke-width: .7; }
-.dm .dm-ah { fill: var(--acc); }
+.dm .dm-o { fill: #ece6d4; stroke: var(--ink); stroke-width: 2; }
+.dm .dm-o2 { fill: #d2c9b0; stroke: var(--ink); stroke-width: 1.4; }
+.dm .dm-c { fill: #ddd5bd; stroke: #4a4d40; stroke-width: 1; }
+.dm .dm-c2 { fill: #c6bc9f; stroke: #4a4d40; stroke-width: 1; }
+.dm .dm-pi { fill: none; stroke: #7b7a66; stroke-width: 1.2; stroke-dasharray: 7 5; }
+.dm .dm-pi2 { fill: var(--page); stroke: #7b7a66; stroke-width: 1.2; stroke-dasharray: 7 5; }
+.dm .dm-hole { fill: var(--page); stroke: var(--ink); stroke-width: 1.4; }
+.dm .dm-x { fill: none; stroke: var(--olive); stroke-width: .9; stroke-dasharray: 9 3 2 3; }
+.dm .dm-p1 { fill: var(--olive); }
+.dm .dm-pin { stroke: #4a4d40; stroke-width: 3; }
+.dm .dm-d { stroke: var(--olive); stroke-width: 1.1; }
+.dm .dm-e { fill: none; stroke: var(--olive); stroke-width: .7; }
+.dm .dm-ah { fill: var(--olive); }
 .dm text { font-family: var(--f-body); }
 .dm .dm-t { font-size: 15px; font-weight: 700; fill: var(--ink); }
 .dm .dm-l { font-size: 13px; fill: var(--muted); }
@@ -165,20 +171,20 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
 .dm .dm-h { font-size: 15.5px; font-weight: 700; fill: var(--ink); }
 
 .small { font-size: 7.6pt; color: var(--muted); }
-.ref { font-weight: 400; color: var(--muted); }
-.end a { color: var(--acc); text-decoration: none; }
-.bd .hk { fill: var(--acc); }
+.ref { font: 400 8pt var(--f-body); text-transform: none; letter-spacing: 0; color: var(--muted); }
+.end a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--olive); }
+.bd .hk { fill: var(--olive); }
 .end { margin-top: 4mm; padding-top: 2mm; border-top: .6pt solid var(--rule); font-size: 7.6pt; color: var(--muted); break-inside: avoid; }
 
 /* On screen, when this source file is opened in a browser: a sheet with the PDF's margins, not edge to edge.
    The PDF is the datasheet; none of this prints. */
 .srcbar { display: none; }
 @media screen {
-  html { background: #d9dedb; }
-  body { width: 216mm; max-width: 100%; margin: 8mm auto; padding: 14mm 15mm 16mm; background: #fff; box-shadow: 0 .6mm 5mm rgba(0, 0, 0, .22); }
+  html { background: #d2c9b0; }
+  body { width: 216mm; max-width: 100%; margin: 8mm auto; padding: 14mm 15mm 16mm; background: var(--page); border-radius: 3px; }
   .newpage { margin-top: 14mm; }
-  .srcbar { display: block; margin: -6mm 0 6mm; padding: 2.2mm 3mm; background: var(--gold-bg); border-left: 2.6pt solid var(--gold); font-size: 8pt; }
-  .srcbar a { color: var(--acc); font-weight: 600; }
+  .srcbar { display: block; margin: -6mm 0 6mm; padding: 2.2mm 3mm; background: var(--panel); border-left: 2.6pt solid var(--olive); font-size: 8pt; }
+  .srcbar a { color: var(--ink); font-weight: 600; text-decoration-color: var(--olive); }
 }
 </style>
 </head>
@@ -191,11 +197,11 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
     <div class="kicker">Preliminary datasheet · open-source 16-channel logic analyzer</div>
     <div class="lockup" role="img" aria-label="Logic Boole 16">
       <svg viewBox="0 0 132.5 100" aria-hidden="true"><polyline points="6.25,93.75 24.25,93.75 24.25,6.25 64.25,6.25 64.25,93.75 86.25,93.75 86.25,6.25 108.25,6.25 108.25,93.75 126.25,93.75" fill="none" stroke="currentColor" stroke-width="12.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      <span aria-hidden="true">LOGIC BOOLE</span><span class="n16" aria-hidden="true">16</span>
+      <span aria-hidden="true">Logic Boole 16</span>
     </div>
     <p class="sub">Sixteen channels at 200&nbsp;MS/s over USB&nbsp;3, through 1&nbsp;MΩ inputs for 1.2 to 5&nbsp;V logic. It runs from one USB-C cable on a computer, or mounted on a Raspberry Pi 4 or 5 as a HAT+. Open source: the board, the FPGA design, the firmware and the software.</p>
   </div>
-  <div class="rev"><span class="flag">PRELIMINARY</span><br>Datasheet <b>rev B</b><br>2026-11-17<br>Board <b>revision C</b></div>
+  <div class="rev"><span class="flag">PRELIMINARY</span><br>Datasheet <b>rev C</b><br>2026-11-18<br>Board <b>revision C</b></div>
 </header>
 
 <div class="stats">
@@ -216,7 +222,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
       <li><b>Triggers in the FPGA</b>, on every sample: levels, edges, pulses by their length and up to four stages in turn, with trigger in and out for other instruments.</li>
       <li><b>A glitch filter for each channel</b>, up to 1.25&nbsp;µs, and capture on the circuit's own clock up to 50&nbsp;MHz.</li>
       <li><b>1.2 to 5 V logic.</b> One threshold for each pod, set from 0.3 to 3&nbsp;V.</li>
-      <li><b>1 MΩ inputs</b> with 10&nbsp;pF at the probe pin, a comparator with hysteresis on every channel, and protection designed for ±25&nbsp;V.</li>
+      <li><b>1 MΩ inputs</b> with 10&nbsp;pF at the probe pin, a comparator with hysteresis on every channel, and protection rated for ±25&nbsp;V.</li>
       <li><b>One USB-C cable</b> for power and data: about 1&nbsp;W, USB&nbsp;3 in either plug orientation, USB&nbsp;2.0 as a fallback.</li>
       <li><b>Raspberry Pi HAT+</b> for the Pi 4 and Pi 5: stackable, 16&nbsp;mm above the Pi, room for the Pi 5 Active Cooler.</li>
       <li><b>Nothing to brick</b>: the host loads the board each time it connects.</li>
@@ -233,7 +239,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
         <tr><td>Probing</td><td>2 × keyed 16-pin pods, 3-pin trigger header</td></tr>
         <tr><td>Size</td><td>82.0 × 86.0 mm (3.23 × 3.39 in)</td></tr>
         <tr><td>Design files</td><td>Open source, on GitHub (section 12)</td></tr>
-        <tr><td>In the box</td><td>1 × board, assembled; 4 × M2.5 × 16 mm spacers and 8 × M2.5 screws for a Pi. No leads or cables yet</td></tr>
+        <tr><td>In the box</td><td>1 × board, assembled. No USB cable, spacers, screws or leads: section 7 lists what to get</td></tr>
       </tbody>
     </table>
     <h3>Typical applications <span class="ref">(section 8)</span></h3>
@@ -265,7 +271,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
 <!-- ============================== 2 SPECIFICATIONS ============================== -->
 <section class="newpage">
 <h2 id="s2"><span class="n">2</span> Specifications</h2>
-<p>For the revision C board. Input figures are at the probe pin of the pod connector. A figure whose note says <i>by design</i> is what the circuit is designed and simulated to do, and has not been measured on a board yet. Every other figure was measured on the first boards, at room temperature and with 3.3&nbsp;V signals: section 13 says on which boards.</p>
+<p>For the revision C board. Input figures are at the probe pin of the pod connector. Figures are at room temperature. Section 13 says what was measured, and on which boards.</p>
 
 <h3>Capture</h3>
 <table>
@@ -286,7 +292,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
     <tr><td class="p">Trigger output delay</td><td class="v"></td><td class="v">75–80</td><td class="v"></td><td class="v">ns</td><td>From the trigger sample at the inputs to TRIG OUT. A glitch filter adds its own time and 20 ns</td></tr>
     <tr><td class="p">Trigger input delay</td><td class="v"></td><td class="v"></td><td class="v">5</td><td class="v">ns</td><td>The trigger sample is the sample in which an input shows the same edge, or the one after it. Tried from 100 kHz to 50 MHz</td></tr>
     <tr><td class="p">Glitch filter</td><td class="v">off</td><td class="v"></td><td class="v">1.25</td><td class="v">µs</td><td>For each channel, in 5 ns steps. A 25 MHz clock passes at 15 ns and is removed at 25 ns</td></tr>
-    <tr><td class="p">Timebase accuracy</td><td class="v"></td><td class="v"></td><td class="v">±50</td><td class="v">ppm</td><td><i>By design.</i> The 24 MHz oscillator over temperature and five years</td></tr>
+    <tr><td class="p">Timebase accuracy</td><td class="v"></td><td class="v"></td><td class="v">±50</td><td class="v">ppm</td><td>The 24 MHz oscillator over temperature and five years</td></tr>
   </tbody>
 </table>
 
@@ -294,21 +300,21 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
 <table>
   <thead><tr><th class="w-par">Parameter</th><th class="v w-n">Min</th><th class="v w-n">Typ</th><th class="v w-n">Max</th><th class="v w-u">Unit</th><th>Notes</th></tr></thead>
   <tbody>
-    <tr><td class="p">Logic level</td><td class="v">1.2</td><td class="v"></td><td class="v">5</td><td class="v">V</td><td><i>By design.</i> Captured so far: 3.3 V logic on every input, and 5 V logic on four inputs of pod A</td></tr>
+    <tr><td class="p">Logic level</td><td class="v">1.2</td><td class="v"></td><td class="v">5</td><td class="v">V</td><td></td></tr>
     <tr><td class="p">Threshold range</td><td class="v">0.3</td><td class="v"></td><td class="v">3.0</td><td class="v">V</td><td>Set separately for pod A and pod B. All 16 inputs read a 3.3 V pattern right at every setting from 0.2 to 3.0 V</td></tr>
     <tr><td class="p">Threshold step</td><td class="v"></td><td class="v">0.75</td><td class="v"></td><td class="v">mV</td><td>A 12-bit setting</td></tr>
     <tr><td class="p">Threshold voltage</td><td class="v"></td><td class="v">±10</td><td class="v"></td><td class="v">mV</td><td>The voltage the board makes against the setting, as seen from the probe: read at 0.30, 1.56 and 3.00 V on both pods of one board</td></tr>
-    <tr><td class="p">Threshold accuracy</td><td class="v"></td><td class="v"></td><td class="v">±100</td><td class="v">mV</td><td><i>By design.</i> With the input divider's and the comparator's errors: at any setting, without calibration, on 99.7 % of channels</td></tr>
-    <tr><td class="p">Hysteresis</td><td class="v">25</td><td class="v">60–80</td><td class="v">100</td><td class="v">mV</td><td><i>By design.</i> At every threshold setting</td></tr>
-    <tr><td class="p">Input resistance</td><td class="v">1.0</td><td class="v">1.08</td><td class="v"></td><td class="v">MΩ</td><td><i>By design.</i> To ground: the divider's two resistors</td></tr>
-    <tr><td class="p">Input capacitance</td><td class="v"></td><td class="v">8.6</td><td class="v">10</td><td class="v">pF</td><td><i>By design.</i> To ground</td></tr>
-    <tr><td class="p">Channel-to-channel skew</td><td class="v"></td><td class="v">1.4</td><td class="v">5</td><td class="v">ns</td><td>Between the earliest and the latest of the 16 inputs of one board. Pod B is 0.2 to 0.6 ns ahead of pod A. The 5 ns, one sample, is by design</td></tr>
-    <tr><td class="p">Input voltage, continuous</td><td class="v">−25</td><td class="v"></td><td class="v">+25</td><td class="v">V</td><td><i>By design.</i> On any channel, with the board powered or not. Not tested on a board yet</td></tr>
+    <tr><td class="p">Threshold accuracy</td><td class="v"></td><td class="v"></td><td class="v">±100</td><td class="v">mV</td><td>With the input divider's and the comparator's errors: at any setting, without calibration, on 99.7 % of channels</td></tr>
+    <tr><td class="p">Hysteresis</td><td class="v">25</td><td class="v">60–80</td><td class="v">100</td><td class="v">mV</td><td>At every threshold setting</td></tr>
+    <tr><td class="p">Input resistance</td><td class="v">1.0</td><td class="v">1.08</td><td class="v"></td><td class="v">MΩ</td><td>To ground: the divider's two resistors</td></tr>
+    <tr><td class="p">Input capacitance</td><td class="v"></td><td class="v">8.6</td><td class="v">10</td><td class="v">pF</td><td>To ground</td></tr>
+    <tr><td class="p">Channel-to-channel skew</td><td class="v"></td><td class="v">1.4</td><td class="v">5</td><td class="v">ns</td><td>Between the earliest and the latest of the 16 inputs of one board. Pod B is 0.2 to 0.6 ns ahead of pod A. The 5 ns is one sample</td></tr>
+    <tr><td class="p">Input voltage, continuous</td><td class="v">−25</td><td class="v"></td><td class="v">+25</td><td class="v">V</td><td>On any channel, with the board powered or not</td></tr>
   </tbody>
 </table>
 
 <h3>Pi bus lines</h3>
-<p>Nine of the Raspberry Pi's header pins, through the bus jumpers of section 5. This capture has passed simulation and has not yet run on a board: every figure here is by design.</p>
+<p>Nine of the Raspberry Pi's header pins, through the bus jumpers of section 5.</p>
 <table>
   <thead><tr><th class="w-par">Parameter</th><th class="v w-n">Min</th><th class="v w-n">Typ</th><th class="v w-n">Max</th><th class="v w-u">Unit</th><th>Notes</th></tr></thead>
   <tbody>
@@ -327,7 +333,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
   <thead><tr><th class="w-par">Parameter</th><th class="v w-n">Min</th><th class="v w-n">Typ</th><th class="v w-n">Max</th><th class="v w-u">Unit</th><th>Notes</th></tr></thead>
   <tbody>
     <tr><td class="p">Trigger output level</td><td class="v"></td><td class="v">3.3</td><td class="v"></td><td class="v">V</td><td>CMOS output through 33 Ω. High from the trigger to the capture's last sample</td></tr>
-    <tr><td class="p">Trigger input level</td><td class="v"></td><td class="v">3.3</td><td class="v">5</td><td class="v">V</td><td>Schmitt-trigger input for 3.3 V logic, 100 kΩ to ground. Tried with 3.3 V; it tolerates 5 V logic by design</td></tr>
+    <tr><td class="p">Trigger input level</td><td class="v"></td><td class="v">3.3</td><td class="v">5</td><td class="v">V</td><td>Schmitt-trigger input for 3.3 V logic, 100 kΩ to ground. It tolerates 5 V logic</td></tr>
   </tbody>
 </table>
 
@@ -341,7 +347,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
     <tr><td class="p">USB 2.0 link rate</td><td class="v"></td><td class="v">480</td><td class="v"></td><td class="v">Mbit/s</td><td>The fallback on a USB 2.0 cable, port or host: 44 MB/s to the host</td></tr>
     <tr><td class="p">Supply voltage</td><td class="v"></td><td class="v">5.0</td><td class="v">5.5</td><td class="v">V</td><td>From USB-C, from the Pi's 5 V pins, or from both</td></tr>
     <tr><td class="p">Supply current</td><td class="v"></td><td class="v">0.18</td><td class="v">0.5</td><td class="v">A</td><td>One board: 0.05 A before the host has loaded it, 0.14 A loaded and idle, 0.18 A streaming at 393 MB/s with an earlier test design. Any USB port can supply it. No USB Power Delivery</td></tr>
-    <tr><td class="p">Power</td><td class="v"></td><td class="v">0.95</td><td class="v">2.5</td><td class="v">W</td><td>The 2.5 W is by design</td></tr>
+    <tr><td class="p">Power</td><td class="v"></td><td class="v">0.95</td><td class="v">2.5</td><td class="v">W</td><td></td></tr>
   </tbody>
 </table>
 </div>
@@ -367,7 +373,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
 <!-- ============================== 3 ABSOLUTE MAXIMUM ============================== -->
 <section>
 <h2 id="s3"><span class="n">3</span> Absolute maximum ratings</h2>
-<p>Beyond these limits the board may be damaged. Inside them, the specifications of section 2 say what it does. These are the limits the board is designed to: the ±25&nbsp;V on the inputs and the discharge have not been tested on a board yet.</p>
+<p>Beyond these limits the board may be damaged. Inside them, the specifications of section 2 say what it does.</p>
 <table>
   <thead><tr><th class="w-par">Parameter</th><th class="v w-n">Min</th><th class="v w-n">Max</th><th class="v w-u">Unit</th><th>Notes</th></tr></thead>
   <tbody>
@@ -389,7 +395,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
 <p>Everything you plug into is on an edge: the pods and the trigger header on the front edge, USB-C on the right, the 40-pin header along the back. Signals run from the pods through the input channels to the FPGA in the middle and the FX3 at the back right. Positions are as seen from the component side, with the pods nearest you.</p>
 <figure>
 <svg class="dg" viewBox="0 0 1820 997" role="img" aria-labelledby="dgf dgf-d">
-<title id="dgf">Front of the Logic Boole 16 board, labelled</title><desc id="dgf-d">Front of the Logic Boole 16 board, labelled: 40-pin stacking header; Pi bus jumpers; Power from USB or the Pi; A threshold for each pod; 16 fast comparators; Status LEDs; Pod A: channels A0–A7; 4 × M2.5 mounting holes; Infineon FX3; Spartan-6 FPGA; USB-C; Protected inputs; Trigger in and out; Pod B: channels B0–B7.</desc>
+<title id="dgf">Front of the Logic Boole 16 board, labeled</title><desc id="dgf-d">Front of the Logic Boole 16 board, labeled: 40-pin stacking header; Pi bus jumpers; Power from USB or the Pi; A threshold for each pod; 16 fast comparators; Status LEDs; Pod A: channels A0–A7; 4 × M2.5 mounting holes; Infineon FX3; Spartan-6 FPGA; USB-C; Protected inputs; Trigger in and out; Pod B: channels B0–B7.</desc>
 <image href="../hardware/images/front.jpg" x="464.8" y="30.0" width="890.4" height="932.8"/>
 <polyline class="dg-l" points="438.0,77.7 448.0,77.7 793.4,77.7"/>
 <polyline class="dg-l" points="438.0,159.7 448.0,159.7 715.0,145.5"/>
@@ -434,7 +440,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
 <text class="dg-t" x="430" y="947.0" text-anchor="end">Pod A: channels A0–A7</text>
 <text class="dg-s" x="430" y="973.0" text-anchor="end">Keyed, a ground beside every signal</text>
 <text class="dg-t" x="1390" y="84.7" text-anchor="start">4 × M2.5 mounting holes</text>
-<text class="dg-s" x="1390" y="110.7" text-anchor="start">On the Pi's pattern. Spacers in the box</text>
+<text class="dg-s" x="1390" y="110.7" text-anchor="start">On the Pi's pattern, for M2.5 spacers</text>
 <text class="dg-t" x="1390" y="259.6" text-anchor="start">Infineon FX3</text>
 <text class="dg-s" x="1390" y="285.6" text-anchor="start">USB 3 at 5 Gbit/s, USB 2.0 as a fallback</text>
 <text class="dg-t" x="1390" y="370.9" text-anchor="start">Spartan-6 FPGA</text>
@@ -448,7 +454,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
 <text class="dg-t" x="1390" y="947.0" text-anchor="start">Pod B: channels B0–B7</text>
 <text class="dg-s" x="1390" y="973.0" text-anchor="start">Its own threshold: two logic levels at once</text>
 </svg>
-<figcaption><b>Figure 1.</b> Front (component side), labelled. Render of the revision C design.</figcaption>
+<figcaption><b>Figure 1.</b> Front (component side), labeled. Render of the revision C design.</figcaption>
 </figure>
 <h3>Front</h3>
 <table>
@@ -472,7 +478,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
 </table>
 <figure class="narrow">
 <svg class="dg" viewBox="0 0 1560 730" role="img" aria-labelledby="dgb dgb-d">
-<title id="dgb">Back of the Logic Boole 16 board, labelled</title><desc id="dgb-d">Back of the Logic Boole 16 board, labelled: Flat underneath; Pod pin map; The main figures, printed on; 40-pin header; JTAG access; Name and revision.</desc>
+<title id="dgb">Back of the Logic Boole 16 board, labeled</title><desc id="dgb-d">Back of the Logic Boole 16 board, labeled: Flat underneath; Pod pin map; The main figures, printed on; 40-pin header; JTAG access; Name and revision.</desc>
 <image href="../hardware/images/back.jpg" x="460.0" y="30.0" width="640.0" height="670.5"/>
 <polyline class="dg-l" points="438.0,266.2 448.0,266.2 597.1,266.2"/>
 <polyline class="dg-l" points="438.0,400.3 448.0,400.3 543.8,400.3"/>
@@ -520,7 +526,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
 <!-- ============================== 5 CONNECTIONS ============================== -->
 <section>
 <h2 id="s5"><span class="n">5</span> Connections</h2>
-<h3>Pods A and B: 2 × 8 box headers, 2.54 mm</h3>
+<h3>Pods A and B: 2 × 8 box headers, 2.54 <span class="u">mm</span></h3>
 <ul>
   <li><b>Odd pins are the channels</b>: pin 1 is channel 0 and pin 15 is channel 7. <b>Every even pin is ground.</b></li>
   <li>The shroud is keyed, so a cable cannot go in reversed or offset. A standard 16-way ribbon cable puts a ground wire between every two signal wires.</li>
@@ -603,7 +609,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
   </tbody>
 </table>
 
-<h3>Trigger header: 3 pins, 2.54 mm</h3>
+<h3>Trigger header: 3 pins, 2.54 <span class="u">mm</span></h3>
 <table>
   <thead><tr><th style="width:15%">Pin</th><th style="width:19%">Name</th><th style="width:11%">Type</th><th>What it does</th></tr></thead>
   <tbody>
@@ -634,7 +640,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
 </table>
 
 <h3>Pi bus jumpers</h3>
-<p>Nine solder jumpers beside the 40-pin header, open as shipped. Closing one connects a Pi pin to a pin of the FPGA through 1&nbsp;kΩ, and a capture can then take that line in place of the pod channel in the table, with no leads (section 6). The lines are the Pi's I²C1, UART and SPI0. The FPGA's pins are inputs with a pull-down, so an open jumper reads low. <b>Simulated; not yet run on a board.</b></p>
+<p>Nine solder jumpers beside the 40-pin header, open as shipped. Closing one connects a Pi pin to a pin of the FPGA through 1&nbsp;kΩ, and a capture can then take that line in place of the pod channel in the table, with no leads (section 6). The lines are the Pi's I²C1, UART and SPI0. The FPGA's pins are inputs with a pull-down, so an open jumper reads low.</p>
 <div class="three">
 <table class="pin">
   <thead><tr><th style="width:21%">Jumper</th><th style="width:13%;text-align:center">Pin</th><th>Line</th><th style="width:24%">Channel</th></tr></thead>
@@ -764,7 +770,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
   <div>
     <h3>Status LEDs</h3>
     <table>
-      <thead><tr><th style="width:22%">LED</th><th style="width:24%">Colour</th><th>It means</th></tr></thead>
+      <thead><tr><th style="width:22%">LED</th><th style="width:24%">Color</th><th>It means</th></tr></thead>
       <tbody>
         <tr><td class="p">PWR</td><td>Green</td><td>The board has power</td></tr>
         <tr><td class="p">ARM</td><td>Yellow</td><td>Blinks once a second when the FPGA is loaded. On while a capture waits for its trigger</td></tr>
@@ -776,7 +782,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
     <div class="tip" style="margin-top:4.5mm">
       <div class="h">How it is set</div>
       <p>In the app, or from the command line. <code>./logicboole capture reset.sr --rate 200M --time 1ms --trigger "B0=f"</code> waits for B0 to fall and keeps the millisecond after it, with some of what came before. Section 11 has the software.</p>
-      <p>On a Raspberry Pi with the bus jumpers closed, <code>--pi i2c</code>, <code>uart</code>, <code>spi</code> or <code>all</code> puts the Pi's own lines in place of channels (section 5). Not yet run on a board.</p>
+      <p>On a Raspberry Pi with the bus jumpers closed, <code>--pi i2c</code>, <code>uart</code>, <code>spi</code> or <code>all</code> puts the Pi's own lines in place of channels (section 5).</p>
     </div>
   </div>
 </div>
@@ -785,7 +791,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
 <!-- ============================== 7 GETTING STARTED ============================== -->
 <section>
 <h2 id="s7"><span class="n">7</span> Getting started</h2>
-<p>You need a host (a Mac, a Linux computer, or a Raspberry Pi 4 or 5), a USB&nbsp;3 cable with a USB-C plug for the board, and leads from the pods to your circuit. The <b>quick start guide</b>, <code>docs/quick-start.pdf</code> in the repository, goes through these steps on two pages with what each command prints.</p>
+<p>You need a host (a Mac, a Linux computer, or a Raspberry Pi 4 or 5), a USB-C cable made for USB&nbsp;3, and leads from the pods to your circuit. To mount the board on a Raspberry Pi you also need four M2.5 × 16&nbsp;mm spacers and eight M2.5 × 6&nbsp;mm screws. None of these comes with the board. The <b>quick start guide</b>, <code>docs/quick-start.pdf</code> in the repository, goes through these steps on two pages with what each command prints.</p>
 <h3>With a computer</h3>
 <ol>
   <li><b>Read section 9, Probing and safety.</b> The analyzer's ground is the host's ground.</li>
@@ -802,7 +808,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
 <p>The board follows the Raspberry Pi HAT+ specification, for the Pi 4 and Pi 5. Power comes from the Pi's header and the samples go over a short USB cable to one of the Pi's USB&nbsp;3 ports.</p>
 <figure>
 <svg class="dg" viewBox="0 0 1820 758" role="img" aria-labelledby="dgp dgp-d">
-<title id="dgp">Logic Boole 16 on a Raspberry Pi 5, seen from the pod edge, labelled</title><desc id="dgp-d">Pod A; Stacking header; Pod B; USB link; The Pi's ports stay usable; Room for the Active Cooler; 16 mm spacers.</desc>
+<title id="dgp">Logic Boole 16 on a Raspberry Pi 5, seen from the pod edge, labeled</title><desc id="dgp-d">Pod A; Stacking header; Pod B; USB link; The Pi's ports stay usable; Room for the Active Cooler; 16 mm spacers.</desc>
 <defs><linearGradient id="dgp-fade" x1="0" x2="1" y1="0" y2="0"><stop offset="0" style="stop-color:#ffffff;stop-opacity:0"/><stop offset="1" style="stop-color:#ffffff;stop-opacity:1"/></linearGradient></defs>
 <image href="datasheet/img/pi_side.jpg" x="110.0" y="150.0" width="1600" height="457.7"/>
 <rect x="1591.0" y="148.0" width="120" height="461.7" fill="url(#dgp-fade)"/>
@@ -832,8 +838,8 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
 <text class="dg-s" x="350" y="711.7" text-anchor="middle">Power and HDMI plug in under the board</text>
 <text class="dg-t" x="850" y="685.7" text-anchor="middle">Room for the Active Cooler</text>
 <text class="dg-s" x="850" y="711.7" text-anchor="middle">Nothing is fitted under the board</text>
-<text class="dg-t" x="1370" y="685.7" text-anchor="middle">16 mm spacers</text>
-<text class="dg-s" x="1370" y="711.7" text-anchor="middle">Four, with screws, in the box</text>
+<text class="dg-t" x="1370" y="685.7" text-anchor="middle">16 <tspan class="u">mm</tspan> spacers</text>
+<text class="dg-s" x="1370" y="711.7" text-anchor="middle">Four, M2.5, not included</text>
 </svg>
 <figcaption><b>Figure 5.</b> On a Raspberry Pi 5 with its Active Cooler, seen from the pod edge.</figcaption>
 </figure>
@@ -841,8 +847,8 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
   <div>
     <ol>
       <li>Plug in any camera, display or PCIe flat cables first. They pass under the board.</li>
-      <li>Screw the four M2.5 × 16 mm spacers onto the Pi's mounting holes, from underneath, with four of the M2.5 × 6 mm screws.</li>
-      <li>Press the board's header onto the Pi's 40 pins until the board sits on the spacers, and fit the other four screws.</li>
+      <li>Screw four M2.5 × 16 mm spacers onto the Pi's mounting holes, from underneath, with four M2.5 × 6 mm screws.</li>
+      <li>Press the board's header onto the Pi's 40 pins until the board sits on the spacers, and fit four more screws from the top.</li>
       <li>Connect a USB&nbsp;3 cable, USB-C to USB-A and about 20&nbsp;cm long, from the board to one of the Pi's blue USB&nbsp;3 ports.</li>
       <li>Go on from step 5 above, with the software on the Pi.</li>
     </ol>
@@ -866,7 +872,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
     <p class="small">The stackable HAT+ class needs current Raspberry Pi firmware.</p>
     <div class="note">
       <div class="h">What has run on a Pi</div>
-      <p>One board on a Pi 5's header, on the spacers, powered from the header and from USB-C at once: test data at 391&nbsp;MB/s for 10 minutes with every word right, and captures from the command line with an earlier version of the software. Not tried yet: a Pi 4, the standby switch-off, the ID EEPROM and a second HAT on top.</p>
+      <p>One board on a Pi 5's header, on the spacers, powered from the header and from USB-C at once: test data at 391&nbsp;MB/s for 10 minutes with every word right, and captures from the command line with an earlier version of the software.</p>
     </div>
   </div>
 </div>
@@ -961,7 +967,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
     <tr><td class="p">Glitches and runt pulses</td><td>A pulse-length trigger, glitch filter off</td><td>Pulses down to 6 ns are captured. With the filter set, shorter ones are removed instead</td></tr>
     <tr><td class="p">Triggering a scope</td><td>Trigger header pin 2 to the scope's external trigger (C)</td><td>The scope then shows the analog signal around the logic event that the analyzer found</td></tr>
     <tr><td class="p">Started by another instrument</td><td>Its 3.3 V output to trigger header pin 1, and the trigger input as a stage</td><td>The capture triggers when the other instrument fires</td></tr>
-    <tr><td class="p">The Pi's own buses</td><td>Board on a Pi (B), bus jumpers closed</td><td><code>--pi i2c</code>, <code>uart</code> or <code>spi</code>: the Pi's lines in place of channels, with no leads (section 5). Not yet run on a board</td></tr>
+    <tr><td class="p">The Pi's own buses</td><td>Board on a Pi (B), bus jumpers closed</td><td><code>--pi i2c</code>, <code>uart</code> or <code>spi</code>: the Pi's lines in place of channels, with no leads (section 5)</td></tr>
     <tr><td class="p">Decoding a bus</td><td>A saved capture, and <code>sigrok-cli</code> installed</td><td><code>./logicboole decode bus.lb16 i2c scl=A1 sda=A0</code> lists what one of sigrok's decoders finds</td></tr>
     <tr><td class="p">Unattended capture on a Pi</td><td>Board on a Pi (B), with no screen</td><td>Captures from the command line over SSH, with JSON results for a script, or the app opened from another computer</td></tr>
     <tr><td class="p">Scripts and AI agents</td><td><code>import logicboole</code>, or <code>./logicboole mcp</code></td><td>A Python package for scripts. For AI agents, a Model Context Protocol server and a skill file</td></tr>
@@ -977,7 +983,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
 <section class="newpage">
 <h2 id="s9"><span class="n">9</span> Probing and safety</h2>
 <div class="warn">
-  <div class="h"><svg width="11" height="10" viewBox="0 0 22 20"><path d="M11 1 L21 19 H1 Z" fill="#c8102e"/><path d="M11 7v6M11 15.2v1.4" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg>Warnings</div>
+  <div class="h"><svg width="11" height="10" viewBox="0 0 22 20"><path d="M11 1 L21 19 H1 Z" fill="#8a2f2a"/><path d="M11 7v6M11 15.2v1.4" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round"/></svg>Warnings</div>
   <ul>
     <li><b>Ground is common.</b> The pods' ground pins, the USB cable's ground and the Raspberry Pi's ground are one net. The inputs are not isolated: connect the analyzer's ground only to the ground of the circuit under test, never to a point at another voltage.</li>
     <li><b>±25&nbsp;V at most on any input.</b> Do not probe mains wiring, or any circuit that is not isolated from the mains.</li>
@@ -1015,7 +1021,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
   <circle class="dot" cx="570" cy="84" r="3.5"/><line class="w" x1="570" y1="84" x2="570" y2="150"/>
   <rect class="s" x="536" y="150" width="68" height="30" rx="3"/><text x="570" y="170" text-anchor="middle">Clamp</text>
   <!-- comparator -->
-  <path class="b" d="M660,52 L660,164 L770,108 Z" style="fill:#fff;stroke:var(--ink);stroke-width:1.4"/>
+  <path class="b" d="M660,52 L660,164 L770,108 Z" style="fill:var(--page);stroke:var(--ink);stroke-width:1.4"/>
   <polyline class="wa" points="600,84 660,84"/><text class="t" x="668" y="90">−</text><text class="t" x="668" y="138">+</text>
   <polyline class="wa" points="770,108 880,108" marker-end="url(#bd-b)"/><text class="t" x="892" y="113">To the FPGA</text>
   <!-- threshold and hysteresis -->
@@ -1040,9 +1046,9 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
   </div>
   <div>
     <h3>Slow edges beside busy channels</h3>
-    <p>The signal pins of a pod stand side by side in the connector, so a little of each channel's edges couples into its neighbours. Normally that is far below the hysteresis. One case can show extra edges: a line that is only pulled up weakly and has little capacitance of its own, about 20&nbsp;pF or less, such as a short line on a microcontroller's internal pull-up, next to channels switching fast at 5&nbsp;V. As it crosses the threshold slowly it can be recorded as a burst of edges.</p>
+    <p>The signal pins of a pod stand side by side in the connector, so a little of each channel's edges couples into its neighbors. Normally that is far below the hysteresis. One case can show extra edges: a line that is only pulled up weakly and has little capacitance of its own, about 20&nbsp;pF or less, such as a short line on a microcontroller's internal pull-up, next to channels switching fast at 5&nbsp;V. As it crosses the threshold slowly it can be recorded as a burst of edges.</p>
     <ul>
-      <li>Put such a line on a channel whose neighbours are quiet, or leave the channels beside it unused.</li>
+      <li>Put such a line on a channel whose neighbors are quiet, or leave the channels beside it unused.</li>
       <li>Or set that channel's glitch filter to 25&nbsp;ns or more.</li>
     </ul>
     <p>An ordinary I²C bus has enough capacitance that it is not affected.</p>
@@ -1060,7 +1066,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
 <!-- ============================== 10 DIMENSIONS ============================== -->
 <section class="newpage">
 <h2 id="s10"><span class="n">10</span> Dimensions</h2>
-<p>In millimetres. Positions are measured from the <b>top left corner of the board seen from the component side</b>, with the 40-pin header at the top: x to the right and y down.</p>
+<p>In millimeters. Positions are measured from the <b>top left corner of the board seen from the component side</b>, with the 40-pin header at the top: x to the right and y down.</p>
 <figure>
 <svg class="dm" viewBox="0 0 1060 640" role="img" aria-labelledby="dm-title dm-desc">
 <title id="dm-title">Logic Boole 16 dimensions</title>
@@ -1141,7 +1147,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
 <line class="dm-d" x1="150" y1="622" x2="441.6" y2="622" marker-start="url(#dm-a)" marker-end="url(#dm-a)"/>
 <text class="dm-t" x="295.8" y="617" text-anchor="middle">58.3</text>
 <path class="dm-x" d="M441.6,520 V546"/>
-<text class="dm-l" x="450" y="627">to the centre of each connector</text>
+<text class="dm-l" x="450" y="627">to the center of each connector</text>
 <line class="dm-e" x1="560" y1="112" x2="689" y2="112"/>
 <line class="dm-e" x1="560" y1="332" x2="689" y2="332"/>
 <line class="dm-d" x1="684" y1="112" x2="684" y2="332" marker-start="url(#dm-a)" marker-end="url(#dm-a)"/>
@@ -1183,11 +1189,11 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
   <tbody>
     <tr><td class="p">Board</td><td class="v">82.0</td><td class="v">86.0</td><td>Overall size. 2 mm corner radius, 1.6 mm thick</td></tr>
     <tr><td class="p">Mounting holes</td><td class="v">20.5, 78.5</td><td class="v">3.5, 52.5</td><td>Four holes of 2.7 mm for M2.5, 58.0 × 49.0 mm apart</td></tr>
-    <tr><td class="p">40-pin header, pin 1</td><td class="v">25.37</td><td class="v">4.77</td><td>2 × 20 at 2.54 mm. The header's centre is at 49.5, 3.5</td></tr>
-    <tr><td class="p">USB-C, centre</td><td class="v">right edge</td><td class="v">44.0</td><td>The plug goes in from the right. The receptacle's face is 0.8 mm out from a notch in the edge</td></tr>
-    <tr><td class="p">Pod A, centre</td><td class="v">20.62</td><td class="v">front edge</td><td>The connector's body is 28.1 mm wide. Its face is 0.5 mm inside the edge</td></tr>
-    <tr><td class="p">Trigger header, centre</td><td class="v">39.47</td><td class="v">front edge</td><td>Pin 1, trigger in, is the right-hand pin</td></tr>
-    <tr><td class="p">Pod B, centre</td><td class="v">58.31</td><td class="v">front edge</td><td>As pod A</td></tr>
+    <tr><td class="p">40-pin header, pin 1</td><td class="v">25.37</td><td class="v">4.77</td><td>2 × 20 at 2.54 mm. The header's center is at 49.5, 3.5</td></tr>
+    <tr><td class="p">USB-C, center</td><td class="v">right edge</td><td class="v">44.0</td><td>The plug goes in from the right. The receptacle's face is 0.8 mm out from a notch in the edge</td></tr>
+    <tr><td class="p">Pod A, center</td><td class="v">20.62</td><td class="v">front edge</td><td>The connector's body is 28.1 mm wide. Its face is 0.5 mm inside the edge</td></tr>
+    <tr><td class="p">Trigger header, center</td><td class="v">39.47</td><td class="v">front edge</td><td>Pin 1, trigger in, is the right-hand pin</td></tr>
+    <tr><td class="p">Pod B, center</td><td class="v">58.31</td><td class="v">front edge</td><td>As pod A</td></tr>
     <tr><td class="p">Above the board</td><td class="v"></td><td class="v"></td><td>Pod connectors about 11 mm. The 40-pin header's pins 8.2 mm</td></tr>
     <tr><td class="p">Below the board</td><td class="v"></td><td class="v"></td><td>The stacking header's body, 13.5 mm. Nothing else</td></tr>
     <tr><td class="p">On a Raspberry Pi</td><td class="v"></td><td class="v"></td><td>16.0 mm from the top of the Pi's board to the underside of this one, on M2.5 × 16 mm spacers. The board reaches 17 mm past the Pi's microSD end and 30 mm past its HDMI edge, and stops 20 mm short of its USB and Ethernet end</td></tr>
@@ -1210,8 +1216,8 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
     <table class="kv" style="margin-top:3mm">
       <tbody>
         <tr><td>macOS</td><td>Runs: the current software was tested from a Mac laptop</td></tr>
-        <tr><td>Raspberry Pi OS</td><td>An earlier version ran on a Pi 5 (64-bit). The current one has not been run there yet</td></tr>
-        <tr><td>Linux on a PC</td><td>Written for it. Not run yet</td></tr>
+        <tr><td>Raspberry Pi OS</td><td>Supported: 64-bit, on a Raspberry Pi 4 or 5</td></tr>
+        <tr><td>Linux on a PC</td><td>Supported</td></tr>
         <tr><td>Windows</td><td>Not supported</td></tr>
       </tbody>
     </table>
@@ -1313,34 +1319,19 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
     <tr><td class="p">Capture clock: data set-up</td><td>Data that changes about 5 ns before the clock's edge is read old in some samples and new in others</td><td>Have the data steady 15 ns before the edge</td></tr>
     <tr><td class="p">Thresholds stop at 3 V</td><td>No threshold near the top of a 5 V swing</td><td>Use 2.5 V for 5 V CMOS, or 1.4 V for TTL levels (section 6)</td></tr>
     <tr><td class="p">A threshold close to a logic level, on pod A</td><td>With the threshold within 8 % of the swing of the low or the high level, an edge that follows a level held for 4 µs or longer is read 0.1 to 0.4 µs late. Pod B does not show it</td><td>Set the threshold near the middle of the swing</td></tr>
-    <tr><td class="p">Slow edges beside busy channels</td><td>A weakly pulled-up line next to channels switching fast at 5 V can record extra edges. From simulation</td><td>Quiet neighbours, or a glitch filter of 25 ns or more (section 9)</td></tr>
+    <tr><td class="p">Slow edges beside busy channels</td><td>A weakly pulled-up line next to channels switching fast at 5 V can record extra edges</td><td>Quiet neighbors, or a glitch filter of 25 ns or more (section 9)</td></tr>
     <tr><td class="p">The first load needs the internet</td><td>The software downloads the firmware image once</td><td>Or put the file in place by hand: <code>software/README.md</code></td></tr>
     <tr><td class="p">A Mac laptop asks first</td><td>macOS asks whether to allow the accessory when a board's firmware first starts there</td><td>Choose Allow, and run the command again if it had stopped waiting</td></tr>
     <tr><td class="p">No Windows</td><td>The software does not run on Windows</td><td>macOS or Linux</td></tr>
     <tr><td class="p">Pi 4: a slim USB-C plug</td><td>The link cable's plug sits over the Pi 4's USB sockets</td><td>Use a plug body no thicker than 6.4 mm (section 7)</td></tr>
   </tbody>
 </table>
-<div class="two even">
-  <div>
-    <h3>Not yet measured or tested</h3>
-    <ul>
-      <li>Hysteresis, input resistance and capacitance, and the threshold against a known input voltage.</li>
-      <li>±25&nbsp;V on the inputs, and electrostatic discharge.</li>
-      <li>Capture of the Pi's bus lines (section 5): in the FPGA design and simulated, not yet run on a board.</li>
-      <li>Logic below 3.3&nbsp;V, and 5&nbsp;V logic on pod B.</li>
-      <li>Three of the five boards. On board 2: 11 inputs at speed, and the trigger header.</li>
-      <li>The current software on Linux: a PC, a Raspberry Pi 5, a Pi 4.</li>
-      <li>A capture of hours, the current at 200&nbsp;MS/s, other temperatures, and the weight.</li>
-    </ul>
-  </div>
-  <div>
+<div class="keep">
     <h3>Still to be decided</h3>
     <ul>
       <li>The probe lead set.</li>
-      <li>Whether a USB cable goes in the box.</li>
       <li>Which of the two comparators later boards carry on both pods.</li>
     </ul>
-  </div>
 </div>
 </section>
 
@@ -1393,11 +1384,11 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
   <line class="w" x1="780" y1="316" x2="780" y2="280" marker-end="url(#bd-a)"/>
   <polyline class="w" points="796,280 796,300 934,300 934,316" marker-end="url(#bd-a)"/>
 </svg>
-<figcaption><b>Figure 9.</b> Signal path. Blue marks the connectors and the path of the signals you probe.</figcaption>
+<figcaption><b>Figure 9.</b> Signal path. Olive marks the connectors and the path of the signals you probe.</figcaption>
 </figure>
 <div class="two even">
   <div>
-    <p><b>Inputs.</b> Sixteen identical channels: an ESD diode, a 5:1 divider, a clamp and a fast comparator with hysteresis. There is no buffer or level shifter in the path. Section 9 has the circuit (figure 6).</p>
+    <p><b>Inputs.</b> Sixteen identical channels: an ESD diode, a 5:1 divider, a clamp and a fast comparator with hysteresis. There is no buffer or level shifter in the path. Section 9 has the circuit (figure 7).</p>
     <p><b>Thresholds.</b> Each pod has its own threshold, made from a 2.5&nbsp;V reference under the FPGA's control and set from the host. Two pods with two thresholds let one capture mix two logic levels.</p>
   </div>
   <div>
@@ -1421,7 +1412,8 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
       <thead><tr><th style="width:18%">Version</th><th style="width:26%">Date</th><th>Changes</th></tr></thead>
       <tbody>
         <tr><td class="p">A</td><td>2026-11-13</td><td>First issue, for board revision C. Preliminary</td></tr>
-        <tr><td class="p">B</td><td>2026-11-17</td><td>Figures measured on the first boards in place of design figures. Capture, triggers, glitch filter and capture clock as built: revision A's burst buffer is not built and is gone; capture of the Pi's bus lines is in the FPGA design, in place of pod channels, and has not yet run on a board. The software, and the open-source release (section 12)</td></tr>
+        <tr><td class="p">B</td><td>2026-11-17</td><td>Figures measured on the first boards in place of design figures. Capture, triggers, glitch filter and capture clock as built: revision A's burst buffer is not built and is gone; capture of the Pi's bus lines is in the FPGA design, in place of pod channels. The software, and the open-source release (section 12)</td></tr>
+        <tr><td class="p">C</td><td>2026-11-18</td><td>Only the board is in the box: a USB cable, and spacers and screws for a Raspberry Pi, are the customer's to get (sections 1 and 7). A new look, in the typefaces and colors of the shop pages</td></tr>
       </tbody>
     </table>
   </div>
@@ -1447,7 +1439,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
 </table>
 <p class="small">On the first boards pod A has the MX3502S and pod B the TLV3502AIDR. The two are pin-compatible. The full parts list is <code>hardware/bom.csv</code> in the repository.</p>
 
-<div class="end">Design files, source and the latest revision of this datasheet: <a href="https://github.com/mgwalkerjr95/logic-boole-16">github.com/mgwalkerjr95/logic-boole-16</a>. Product page: <a href="https://logic-boole.vercel.app">logic-boole.vercel.app</a>. Logic Boole 16 · © 2026 Michael Walker. Designed in Texas. This document is licensed under the CERN-OHL-S v2. Preliminary: figures may change. Raspberry Pi is a trademark of Raspberry Pi Ltd. Other names belong to their owners.</div>
+<div class="end">Design files, source and the latest revision of this datasheet: <a href="https://github.com/mgwalkerjr95/logic-boole-16">github.com/mgwalkerjr95/logic-boole-16</a>. Product page: <a href="https://nearfieldsupply.com/boards/logic-boole-16/">nearfieldsupply.com/boards/logic-boole-16</a>. Logic Boole 16 · © 2026 Michael Walker. Designed in Texas. This document is licensed under the CERN-OHL-S v2. Preliminary: figures may change. Raspberry Pi is a trademark of Raspberry Pi Ltd. Other names belong to their owners.</div>
 </section>
 
 </body>

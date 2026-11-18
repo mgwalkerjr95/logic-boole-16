@@ -2,53 +2,68 @@
 <!-- Copyright (C) 2026 Michael Walker -->
 <!-- SPDX-License-Identifier: CERN-OHL-S-2.0 -->
 <!-- The quick start guide.  quick-start.pdf is this page printed from a browser on US Letter paper, with the
-     browser's own headers and footers off and background graphics on. -->
+     browser's own headers and footers off and background graphics on (headless Google Chrome: the options
+     headless=new, no-pdf-header-footer, virtual-time-budget=10000 and print-to-pdf=quick-start.pdf).
+     The fonts are in datasheet/fonts, each under the SIL Open Font License (datasheet/fonts/README.md). -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <title>Logic Boole 16: quick start</title>
+<link rel="stylesheet" href="datasheet/fonts/fonts.css">
 <style>
+  /* The look of the shop pages, on white paper: olive rules, ink text, canvas panels. */
   @page { size: Letter; margin: 11mm 14mm 10mm 14mm; }
   * { box-sizing: border-box; }
   html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  body { margin: 0; font: 8.9pt/1.38 "Helvetica Neue", Helvetica, Arial, sans-serif; color: #1c2321; }
+  body { margin: 0; font: 8.7pt/1.38 "Archivo", "Helvetica Neue", Helvetica, Arial, sans-serif; color: #20231c; }
   .page { break-after: page; }
   .page:last-child { break-after: auto; }
-  header { display: flex; align-items: baseline; justify-content: space-between; border-bottom: 2.2pt solid #1f5a3d;
+  header { display: flex; align-items: baseline; justify-content: space-between; border-bottom: 2.2pt solid #46553a;
            padding-bottom: 5pt; margin-bottom: 9pt; }
-  header h1 { font-size: 21pt; font-weight: 700; margin: 0; letter-spacing: -0.2pt; }
-  header h1 span { font-weight: 300; }
-  header p { margin: 0; color: #55605b; font-size: 9pt; }
-  h2 { font-size: 11.5pt; margin: 0 0 4pt; }
+  header h1 { font: 700 23pt/1 "Archivo Narrow", "Arial Narrow", sans-serif; text-transform: uppercase; letter-spacing: .02em; margin: 0; }
+  header h1 span { font-weight: 400; color: #46553a; }
+  header p { margin: 0; color: #46553a; font: 700 8.2pt "Courier Prime", "Courier New", monospace; }
+  h2 { font: 700 12pt/1.1 "Archivo Narrow", "Arial Narrow", sans-serif; text-transform: uppercase; letter-spacing: .04em; margin: 0 0 4pt; }
   p { margin: 0 0 5pt; }
   ul { margin: 0 0 5pt; padding-left: 13pt; }
   li { margin-bottom: 2.2pt; }
-  code, pre { font-family: Menlo, Consolas, monospace; }
-  code { font-size: 8.3pt; background: #eef2ef; padding: 0.4pt 2.5pt; border-radius: 2pt; }
-  pre { font-size: 7.6pt; line-height: 1.38; background: #17211c; color: #e9f1ec; padding: 5.5pt 8pt; border-radius: 3pt;
+  li::marker { color: #46553a; }
+  a { color: inherit; text-decoration-color: #46553a; }
+  code, pre { font-family: "Courier Prime", "Courier New", monospace; }
+  code { font-size: 8.6pt; background: #f2eddd; padding: 0.4pt 2.5pt 0; border-radius: 2pt; }
+  pre { font-size: 8pt; line-height: 1.32; background: #1d2019; color: #ece6d4; padding: 5.5pt 8pt 4pt; border-radius: 3px;
         margin: 3pt 0 6pt; white-space: pre-wrap; }
-  pre.out { background: #eef2ef; color: #1c2321; }
+  pre.out { background: #f2eddd; color: #20231c; }
   .two { display: flex; gap: 14pt; }
   .two > div { flex: 1; min-width: 0; }
   .need { flex: 0 0 52% !important; }
-  .fill { background: #ffe08a; padding: 0 2pt; }
+  /* The kit list: what is in the box is ticked, what you bring has an empty box. */
+  .kitlist { border: 1.2pt dashed #46553a; border-radius: 3px; background: #f2eddd; padding: 6pt 9pt 4pt; margin-bottom: 6pt; }
+  .kitlist h3 { font: 700 8.2pt "Courier Prime", "Courier New", monospace; color: #46553a; margin: 0 0 3pt; }
+  .kitlist h3 + ul + h3 { margin-top: 5pt; }
+  .kitlist ul { list-style: none; margin: 0; padding: 0; }
+  .kitlist li { position: relative; padding-left: 15pt; margin-bottom: 2.6pt; }
+  .kitlist li::before { content: "\2713"; position: absolute; left: 0; top: 1.4pt; width: 8.6pt; height: 8.6pt; border: 1pt solid #46553a;
+                        border-radius: 1.5pt; color: #46553a; font: 800 7pt/7pt "Archivo", sans-serif; text-align: center; }
+  .kitlist li.no::before { content: ""; border-style: dashed; }
   .step { display: flex; gap: 9pt; margin-top: 6pt; break-inside: avoid; }
-  .n { flex: 0 0 19pt; height: 19pt; border-radius: 50%; background: #1f5a3d; color: #fff; font-weight: 700;
-       font-size: 10.5pt; text-align: center; line-height: 19pt; }
+  .n { flex: 0 0 19pt; height: 19pt; border-radius: 50%; background: #46553a; color: #f2eddd; font: 700 11pt/20pt "Courier Prime", "Courier New", monospace;
+       text-align: center; }
   .step > div:not(.n) { flex: 1; min-width: 0; }
   .cols { columns: 2; column-gap: 16pt; }
   .cols li { break-inside: avoid; }
   .run { display: flex; align-items: center; gap: 9pt; }
   .run pre { flex: 0 0 auto; padding-right: 22pt; }
   .run p { margin: 0; }
-  .note { border-left: 2.5pt solid #c9891a; background: #fbf5e8; padding: 4pt 7pt; margin: 4pt 0 6pt; }
-  .box { border: 0.8pt solid #b9c4be; border-radius: 3pt; padding: 5pt 8pt 3pt; margin-top: 7pt; break-inside: avoid; }
+  .note { border-left: 2.5pt solid #46553a; background: #f2eddd; border-radius: 0 3px 3px 0; padding: 4pt 7pt; margin: 4pt 0 6pt; }
+  .box { border: 0.8pt solid #20231c; border-radius: 3px; padding: 6pt 8pt 3pt; margin-top: 7pt; break-inside: avoid; }
   table { border-collapse: collapse; width: 100%; margin: 2pt 0 6pt; }
-  th, td { text-align: left; vertical-align: top; padding: 2.1pt 6pt 2.1pt 0; border-bottom: 0.5pt solid #d4dcd7; }
-  th { font-size: 8.4pt; color: #55605b; font-weight: 600; }
+  th, td { text-align: left; vertical-align: top; padding: 2.1pt 6pt 2.1pt 0; border-bottom: 0.5pt solid #b9b095; }
+  th { font: 700 8pt "Courier Prime", "Courier New", monospace; color: #46553a; border-bottom: 0.8pt solid #20231c; }
   .os { font-weight: 700; }
-  svg text { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }
-  footer { margin-top: 5pt; padding-top: 3pt; border-top: 0.5pt solid #b9c4be; color: #55605b; font-size: 7.8pt;
+  svg text { font-family: "Archivo", "Helvetica Neue", Helvetica, Arial, sans-serif; }
+  svg text.d { font-family: "Archivo Narrow", "Arial Narrow", sans-serif; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
+  footer { margin-top: 5pt; padding-top: 3pt; border-top: 0.8pt solid #46553a; color: #4a4d40; font-size: 7.8pt;
            display: flex; justify-content: space-between; }
 </style>
 </head>
@@ -63,24 +78,31 @@
 <div class="two">
   <div class="need">
     <h2>What you need</h2>
-    <ul>
-      <li><b>The board.</b></li>
-      <li><b>A computer:</b> a Mac, or Linux (Debian, Ubuntu, Raspberry Pi OS). Windows is not supported.</li>
-      <li><b>A USB-C cable made for USB 3</b> (5 Gbit/s; often marked SS or 5 Gbps), to a USB 3 port of the
-        computer: USB-C to USB-C, or USB-C to a blue USB-A socket. This one cable carries power and data. A
-        USB 2 cable or port also works, for slow signals: the board then carries about a ninth as much.</li>
-      <li><b>Leads for your signals:</b> jumper wires with sockets for 2.54 mm pins, or a 16-way (2 &times; 8)
-        ribbon cable with an IDC socket for each pod.</li>
-      <li><b>Python 3.9 or later</b> and <b>libusb</b> on the computer (step 1). There is nothing else to
-        install, and no driver.</li>
-    </ul>
+    <div class="kitlist">
+      <h3>In the box</h3>
+      <ul>
+        <li><b>The board.</b> Nothing else: no cable, no leads, no spacers.</li>
+      </ul>
+      <h3>You bring</h3>
+      <ul>
+        <li class="no"><b>A computer:</b> a Mac, or Linux (Debian, Ubuntu, Raspberry Pi OS). Windows is not supported.</li>
+        <li class="no"><b>A USB-C cable made for USB 3</b> (5 Gbit/s; often marked SS or 5 Gbps), to a USB 3 port of the
+          computer: USB-C to USB-C, or USB-C to a blue USB-A socket. This one cable carries power and data. A
+          USB 2 cable or port also works, for slow signals: the board then carries about a ninth as much.</li>
+        <li class="no"><b>Leads for your signals:</b> jumper wires with sockets for 2.54 mm pins, or a 16-way (2 &times; 8)
+          ribbon cable with an IDC socket for each pod.</li>
+        <li class="no"><b>Python 3.9 or later</b> and <b>libusb</b> on the computer (step 1). There is nothing else to
+          install, and no driver.</li>
+        <li class="no"><b>For a Raspberry Pi only:</b> four M2.5 &times; 16 mm spacers and eight M2.5 &times; 6 mm screws.</li>
+      </ul>
+    </div>
 
   </div>
 
   <div>
     <svg viewBox="-20 -175 2200 2085" width="100%" role="img" aria-label="The board from above, with its connectors named">
       <image href="../hardware/images/front.jpg" x="0" y="0" width="1500" height="1571"/>
-      <g fill="none" stroke="#c9891a" stroke-width="8">
+      <defs><g id="marks">
         <rect x="1285" y="705" width="205" height="190" rx="14"/>
         <rect x="120" y="1275" width="530" height="280" rx="14"/>
         <rect x="798" y="1275" width="525" height="280" rx="14"/>
@@ -89,8 +111,10 @@
         <rect x="438" y="22" width="930" height="112" rx="14"/>
         <path d="M1490 800 H1555"/><path d="M900 22 V-50"/>
         <path d="M385 1555 V1630"/><path d="M1060 1555 V1630"/><path d="M724 1555 V1730"/><path d="M68 1525 V1810"/>
-      </g>
-      <g font-size="66" fill="#1c2321">
+      </g></defs>
+      <use href="#marks" fill="none" stroke="#20231c" stroke-width="15"/>
+      <use href="#marks" fill="none" stroke="#f2eddd" stroke-width="7"/>
+      <g font-size="66" fill="#20231c">
         <text x="1570" y="780" font-weight="700">USB-C socket:</text>
         <text x="1570" y="860">to the computer</text>
         <text x="750" y="-80" text-anchor="middle"><tspan font-weight="700">40-pin header:</tspan> only for a Raspberry Pi</text>
@@ -168,8 +192,8 @@ The board is ready.  "logicboole" opens the app.</pre>
   </ul>
   <div style="text-align:center">
       <svg viewBox="0 0 760 250" width="52%" role="img" aria-label="The pods seen from the front">
-        <text x="380" y="20" text-anchor="middle" font-size="19" fill="#55605b">Looking into the pods from the board's edge, parts side up</text>
-        <g font-size="19" fill="#1c2321" text-anchor="middle">
+        <text x="380" y="20" text-anchor="middle" font-size="19" fill="#4a4d40" font-style="italic">Looking into the pods from the board's edge, parts side up</text>
+        <g font-size="19" fill="#20231c" text-anchor="middle">
           <text x="168" y="58" font-weight="700">Pod A</text><text x="592" y="58" font-weight="700">Pod B</text>
           <text x="380" y="58" font-weight="700">Trigger</text>
           <g font-size="17">
@@ -180,11 +204,11 @@ The board is ready.  "logicboole" opens the app.</pre>
             <text x="350" y="118">&minus;</text><text x="380" y="118">OUT</text><text x="414" y="118">IN</text>
           </g>
         </g>
-        <g fill="#2a2f2d">
+        <g fill="#20231c">
           <rect x="40" y="96" width="256" height="84" rx="5"/><rect x="464" y="96" width="256" height="84" rx="5"/>
           <rect x="333" y="126" width="98" height="38" rx="4"/>
         </g>
-        <g fill="#e2b93b">
+        <g fill="#f2eddd">
           <g id="row"><rect x="56" y="112" width="14" height="14"/><rect x="86" y="112" width="14" height="14"/>
             <rect x="116" y="112" width="14" height="14"/><rect x="146" y="112" width="14" height="14"/>
             <rect x="176" y="112" width="14" height="14"/><rect x="206" y="112" width="14" height="14"/>
@@ -192,11 +216,11 @@ The board is ready.  "logicboole" opens the app.</pre>
           <use href="#row" x="424"/>
           <rect x="343" y="138" width="14" height="14"/><rect x="373" y="138" width="14" height="14"/><rect x="407" y="138" width="14" height="14"/>
         </g>
-        <g fill="#9aa39e"><use href="#row" y="38"/><use href="#row" x="424" y="38"/></g>
-        <rect x="20" y="186" width="720" height="9" fill="#1f5a3d"/>
-        <g font-size="18" fill="#1c2321">
-          <rect x="60" y="212" width="14" height="14" fill="#e2b93b"/><text x="82" y="225">upper row: the 16 signal pins</text>
-          <rect x="420" y="212" width="14" height="14" fill="#9aa39e"/><text x="442" y="225">lower row: ground, every pin</text>
+        <g fill="#9aa888"><use href="#row" y="38"/><use href="#row" x="424" y="38"/></g>
+        <rect x="20" y="186" width="720" height="9" fill="#46553a"/>
+        <g font-size="18" fill="#20231c">
+          <rect x="60" y="212" width="14" height="14" fill="#f2eddd" stroke="#20231c" stroke-width="1.5"/><text x="82" y="225">upper row: the 16 signal pins</text>
+          <rect x="420" y="212" width="14" height="14" fill="#9aa888" stroke="#20231c" stroke-width="1.5"/><text x="442" y="225">lower row: ground, every pin</text>
         </g>
       </svg>
   </div>
@@ -242,8 +266,9 @@ The board is ready.  "logicboole" opens the app.</pre>
 <div class="box">
   <h2>On a Raspberry Pi 4 or 5</h2>
   <ul class="cols">
-    <li>Set the board on the Pi's 40-pin header, on four M2.5 &times; 16 mm spacers; it takes its power there.
-      Join its USB-C socket to a blue USB 3 socket of the Pi with a short cable, for the data.</li>
+    <li>Set the board on the Pi's 40-pin header, on four M2.5 &times; 16 mm spacers held by eight M2.5 &times; 6 mm
+      screws (yours to get: they are not in the box); it takes its power there. Join its USB-C socket to a blue
+      USB 3 socket of the Pi with a short USB 3 cable, for the data.</li>
     <li>Then steps 1 to 6 as on any Linux computer. With no screen on the Pi: <code>./logicboole --host
       0.0.0.0</code>, and open <code>http://</code>the Pi's name<code>:8016</code> elsewhere, on a network you
       trust (the app has no password).</li>

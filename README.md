@@ -1,17 +1,17 @@
 <div align="center">
 
+<img src="docs/images/banner.png" width="1000" alt="Logic Boole 16: a 16-channel logic analyzer on USB 3, for a computer or a Raspberry Pi. 200 MS/s on 16 channels, a threshold from 0.3 to 3 V for each pod, one USB-C cable for power and data. Beside the name, the board: two 16-pin pod connectors at the front, the FPGA in the middle, USB-C on the right and the 40-pin Raspberry Pi header at the back">
+
 # Logic Boole 16
 
 **An open-source 16-channel, 200 MS/s logic analyzer on USB 3.**<br>
 It runs from one USB-C cable on a computer, or sits on a Raspberry Pi 4 or 5 as a HAT+.
 
-[![Hardware: CERN-OHL-S v2](https://img.shields.io/badge/hardware-CERN--OHL--S_v2-2ea44f)](LICENSE)
-[![Software: GPL-3.0-or-later](https://img.shields.io/badge/software-GPL--3.0--or--later-2ea44f)](software/LICENSE)
-[![Firmware: MIT](https://img.shields.io/badge/firmware-MIT-2ea44f)](firmware/LICENSE)
-[![Board: revision C](https://img.shields.io/badge/board-revision_C-1f6feb)](hardware/)
-[![Hosts: macOS and Linux](https://img.shields.io/badge/hosts-macOS_%7C_Linux-6e7781)](#get-started)
-
-<img src="docs/images/board.png" width="640" alt="The Logic Boole 16 board: two 16-pin pod connectors at the front, the FPGA in the middle, USB-C on the right and the 40-pin Raspberry Pi header at the back">
+[![Hardware: CERN-OHL-S v2](https://img.shields.io/badge/hardware-CERN--OHL--S_v2-46553a?labelColor=20231c)](LICENSE)
+[![Software: GPL-3.0-or-later](https://img.shields.io/badge/software-GPL--3.0--or--later-46553a?labelColor=20231c)](software/LICENSE)
+[![Firmware: MIT](https://img.shields.io/badge/firmware-MIT-46553a?labelColor=20231c)](firmware/LICENSE)
+[![Board: revision C](https://img.shields.io/badge/board-revision_C-46553a?labelColor=20231c)](hardware/)
+[![Hosts: macOS and Linux](https://img.shields.io/badge/hosts-macOS_%7C_Linux-46553a?labelColor=20231c)](#get-started)
 
 **[Quick start](docs/quick-start.pdf)** · **[Datasheet](docs/datasheet.pdf)** · **[Software](software/README.md)** · **[FPGA design](gateware/README.md)** · **[Firmware](firmware/README.md)** · **[Protocol](docs/protocol.md)** · **[Schematic](hardware/logic-boole-16_revC_schematic.pdf)**
 
@@ -46,7 +46,7 @@ need no board: `./logicboole --fake` runs the whole software that way.
 ## Get started
 
 You need a Mac or a Linux computer (a Raspberry Pi 4 or 5 counts), Python 3.9 or later, and a USB 3 cable with
-a USB-C plug for the board.
+a USB-C plug for the board. A board comes with no cable, leads, spacers or screws.
 
 **1. Get the software and libusb**
 
@@ -193,7 +193,8 @@ The fabrication files are the ones revision C was made from at JLCPCB.
 
 - J8, the 40-pin stacking header, is not in JLCPCB's library. It is a SparkFun PRT-16764, soldered square to
   the board after delivery.
-- On a Raspberry Pi the board sits on four M2.5 × 16 mm spacers, which leaves room for the Pi 5's Active Cooler.
+- On a Raspberry Pi the board sits on four M2.5 × 16 mm spacers, held by eight M2.5 × 6 mm screws, which leaves
+  room for the Pi 5's Active Cooler. Spacers and screws are not part of the board.
 
 </details>
 
