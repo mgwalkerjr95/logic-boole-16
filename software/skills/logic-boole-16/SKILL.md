@@ -29,8 +29,8 @@ read times and protocol messages off that file. `info`, `inputs`, `threshold`, `
 
 ## Running the command
 
-Use `logicboole` if it is on the PATH. Otherwise the repository's top folder has a launcher that needs nothing
-installed: `./logicboole` from there (it needs Python 3.9 or later, and libusb).
+Use `logicboole` if it is on the PATH (`pipx install logicboole` puts it there). Otherwise the repository's top
+folder has a launcher that needs nothing installed: `./logicboole` from there (it needs Python 3.9 or later, and libusb).
 
 `--fake` before the command uses a stand-in for the board that makes a 100 kHz I2C bus on A0 (SDA) and A1
 (SCL). Use it to try a command when no board is connected, and never to answer a question about real hardware.
@@ -187,6 +187,12 @@ the start, and `period` (rising edge to rising edge), `high` and `low` (how long
 it is high. `--list N` adds the first N changes themselves as `{"time", "sample", "channel", "level"}`, across
 the channels in the order they happened: the way to get the time from an edge on one channel to an edge on
 another. `--from` and `--to` look at a part of the capture.
+
+`average_frequency` is all the rising edges over the time they span. For a steady clock it is the precise
+figure, and the one to report: a time is a whole number of samples, so a clock fast against the sample rate
+has periods of two lengths and its median is one of them (a 200 MHz clock at 750 MS/s has periods of 3 and 4
+samples: `frequency` says 187.5 MHz, `average_frequency` 199.92 MHz). On a bus that sends in bursts the gaps
+lower the average: report `frequency` there.
 
 Read `min` and `max` together with `median`: on a bus that sends in bursts the largest period spans an idle
 gap and is not a slow clock, `frequency` (from the median) is the clock's rate inside the bursts, and `duty`

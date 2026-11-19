@@ -472,7 +472,12 @@ def measure(args):
                                       else "%s ... %s, the median %s" % (span(v["min"]), span(v["max"]),
                                                                          span(v["median"])))
             if key == "period":
-                line += "  (%s%s)" % (hertz(c["frequency"]), ", high %.4g %% of the time" % (100 * c["duty"]))
+                average = c["average_frequency"]       # a steady clock between whole samples: the precise figure
+                steady = (v["max"] - v["min"]) * m["sample_rate"] <= 2.5
+                line += "  (%s%s%s)" % (hertz(c["frequency"]),
+                                        "; %s on average over all of them" % hertz(average)
+                                        if steady and abs(average / c["frequency"] - 1) >= 1e-3 else "",
+                                        ", high %.4g %% of the time" % (100 * c["duty"]))
             print(line)
     for e in m["changes"]:
         print("  %13.9f s  %s %s" % (e["time"], e["channel"], "rises" if e["level"] else "falls"))

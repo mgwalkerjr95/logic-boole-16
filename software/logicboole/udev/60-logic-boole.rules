@@ -4,7 +4,7 @@
 # Logic Boole 16: lets the person at the computer, and the members of the group plugdev, open the board on USB.
 # Without this rule Linux gives a USB device to root alone.
 #
-#     sudo cp 60-logic-boole.rules /etc/udev/rules.d/
+#     sudo cp 60-logic-boole.rules /etc/udev/rules.d/     ("logicboole check" prints this with the file's place)
 #     sudo udevadm control --reload
 #     sudo udevadm trigger
 #

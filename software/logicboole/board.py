@@ -15,6 +15,7 @@ docs/protocol.md describes every request and register used here.
 """
 import hashlib
 import os
+import shlex
 import struct
 import sys
 import time
@@ -58,9 +59,10 @@ PORT_ERRORS = {5: "a word arrived with no buffer to take it", 0x12: "the socket 
 RAM = range(0x40003000, 0x40080000)
 TCM = range(0x00000100, 0x00004000)
 IN_USE = "A capture is running: is another program using the board?"
+RULE = os.path.join(HERE, "udev", "60-logic-boole.rules")     # in the package, so that pip and pipx install it too
 NO_ACCESS = ("The board is on USB, but this user may not open it.  Install the udev rule once: "
-             "sudo cp software/udev/60-logic-boole.rules /etc/udev/rules.d/ && sudo udevadm control --reload "
-             "&& sudo udevadm trigger")
+             "sudo cp %s /etc/udev/rules.d/ && sudo udevadm control --reload "
+             "&& sudo udevadm trigger" % shlex.quote(RULE))
 HELD_BACK = ("The board is on USB, but macOS has not let it connect, so no program can use it.  macOS asks \"Allow "
              "accessory to connect?\" when a board it does not know comes to USB: choose Allow, or run the command "
              "again and choose Allow then.  If it does not ask, look at \"Allow accessories to connect\" under "

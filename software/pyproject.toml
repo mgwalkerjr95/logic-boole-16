@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "logicboole"
-version = "1.0.0"
+version = "1.1.0"
 description = "Host software for the Logic Boole 16, a 16-channel logic analyzer on USB 3"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -13,6 +13,25 @@ license = "GPL-3.0-or-later AND CERN-OHL-S-2.0 AND MIT AND LicenseRef-Infineon-F
 license-files = ["LICENSE", "logicboole/data/NOTICE.md"]
 authors = [{ name = "Michael Walker" }]
 dependencies = []
+keywords = ["logic analyzer", "sigrok", "FPGA", "USB 3", "Raspberry Pi", "MCP", "AI agent"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Environment :: Web Environment",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Electronic Design Automation (EDA)",
+    "Topic :: System :: Hardware",
+]
+
+[project.urls]
+Homepage = "https://nearfieldsupply.com/boards/logic-boole-16/"
+Source = "https://github.com/mgwalkerjr95/logic-boole-16"
+Documentation = "https://github.com/mgwalkerjr95/logic-boole-16/blob/main/software/README.md"
+Issues = "https://github.com/mgwalkerjr95/logic-boole-16/issues"
 
 [project.scripts]
 logicboole = "logicboole.cli:main"
@@ -21,4 +40,4 @@ logicboole = "logicboole.cli:main"
 packages = ["logicboole"]
 
 [tool.setuptools.package-data]
-logicboole = ["data/*", "web/*"]
+logicboole = ["data/*", "web/*", "udev/*"]

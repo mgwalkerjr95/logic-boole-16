@@ -117,8 +117,10 @@ class Capture:
         The dict: sample_rate, sample_seconds, start, end, channels, changes and changes_total.  For each
         channel: channel, starts (its level at the start: 0 or 1), changes, rising, falling, period (from one
         rising edge to the next), high and low (how long it stayed there between two changes), each as min,
-        median and max in seconds or None if there was none, frequency (1 / the median period) and duty (the
-        part of the time it was high, from its first rising edge to its last).  Each of changes: time (seconds),
+        median and max in seconds or None if there was none, frequency (1 / the median period),
+        average_frequency (the rising edges from the first to the last, over the time between them: precise for a
+        steady clock, where frequency is held to whole samples, but lowered by any gap in a bus that sends in
+        bursts) and duty (the part of the time it was high, from its first rising edge to its last).  Each of changes: time (seconds),
         sample, channel, level (what it changed to)."""
         first = 0 if start is None else max(0, round(start * self.rate))
         last = self.samples if end is None else min(self.samples, round(end * self.rate))
@@ -153,6 +155,7 @@ class Capture:
             out.append({"channel": CHANNELS[ch], "starts": level, "changes": len(w), "rising": len(rising),
                         "falling": len(w) - len(rising), "period": period,
                         "frequency": self.rate / statistics.median(periods) if periods else None,
+                        "average_frequency": len(periods) * self.rate / (rising[-1] - rising[0]) if periods else None,
                         "high": spread(highs), "low": spread(lows),
                         "duty": sum(highs[:len(rising) - 1]) / (rising[-1] - rising[0]) if period else None})
             lists.append([(s, ch, level ^ 1 ^ (k & 1)) for k, s in enumerate(islice(w, listed))])

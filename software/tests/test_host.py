@@ -877,10 +877,10 @@ class Measuring(unittest.TestCase):
         self.assertEqual((m["sample_rate"], m["sample_seconds"], m["start"], m["end"]), (1e6, 1e-6, 0.0, 54e-6))
         self.assertEqual((a0["channel"], a0["starts"], a0["changes"], a0["rising"], a0["falling"]), ("A0", 0, 20, 10, 10))
         self.assertEqual(a0["period"], {"min": 5e-6, "median": 5e-6, "max": 5e-6})
-        self.assertEqual((a0["high"]["median"], a0["low"]["median"], a0["frequency"]), (3e-6, 2e-6, 200e3))
+        self.assertEqual((a0["high"]["median"], a0["low"]["median"], a0["frequency"], a0["average_frequency"]), (3e-6, 2e-6, 200e3, 200e3))
         self.assertAlmostEqual(a0["duty"], 0.6)
         self.assertEqual((a1["channel"], a1["changes"], a1["rising"], a1["high"]), ("A1", 2, 1, {"min": 20e-6, "median": 20e-6, "max": 20e-6}))
-        self.assertEqual((a1["period"], a1["frequency"], a1["low"], a1["duty"]), (None, None, None, None))
+        self.assertEqual((a1["period"], a1["frequency"], a1["average_frequency"], a1["low"], a1["duty"]), (None, None, None, None, None))
         self.assertEqual(m["changes_total"], 22)
         self.assertEqual([(c["sample"], c["channel"], c["level"]) for c in m["changes"]],
                          [(4, "A0", 1), (7, "A0", 0), (9, "A0", 1), (10, "A1", 1)])
@@ -894,6 +894,14 @@ class Measuring(unittest.TestCase):
             cap.measure(["C1"])
         with self.assertRaises(ValueError):
             cap.measure(start=2e-5, end=1e-5)
+
+    def test_a_clock_between_whole_samples(self):
+        # periods of 4, 4, 4 and 3 samples, as a 200 MHz clock at 750 MS/s: the median is 4, the average 3.75
+        samples = [0] + ([1, 1, 0, 0] * 3 + [1, 0, 0]) * 40 + [1]
+        cap = Capture(750e6, array("H", samples), array("Q", [1] * len(samples)))
+        a0 = cap.measure(["A0"])["channels"][0]
+        self.assertEqual((a0["rising"], a0["frequency"]), (161, 187.5e6))
+        self.assertAlmostEqual(a0["average_frequency"], 200e6)
 
     def test_against_the_samples_one_by_one(self):
         rng = random.Random(11)

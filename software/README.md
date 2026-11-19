@@ -36,27 +36,32 @@ You need Python 3.9 or later and libusb.
 | macOS | `brew install libusb` |
 | Debian, Ubuntu, Raspberry Pi OS | libusb is already installed. Install the USB rule below, once |
 
-Windows is not supported.
+Windows is not supported. Then install the package:
 
-Then, from the top folder of this repository:
+    pipx install logicboole
 
-    ./logicboole check
+(pipx: `brew install pipx` on a Mac, `sudo apt install pipx` on Debian, Ubuntu and Raspberry Pi OS, then
+`pipx ensurepath` once.) `pip install logicboole` inside a virtual environment does the same, and gives your own
+programs `import logicboole`. Then
+
+    logicboole check
 
 checks this computer and the board and says what to do about anything that is missing, and
 
-    ./logicboole
+    logicboole
 
 opens the app.
 
-Nothing needs installing. If you want `logicboole` as a command everywhere, and `import logicboole` in your own
-programs, install the package: `pipx install ./software`, or `pip install ./software` inside a virtual
-environment.
+From a copy of this repository nothing needs installing: `./logicboole` in its top folder does what `logicboole`
+does in this README. `pipx install ./software` installs that copy as the package.
 
 ### Linux: the USB rule
 
-Linux gives a USB device to root alone until a rule says otherwise. Install the rule once:
+Linux gives a USB device to root alone until a rule says otherwise. The rule comes with the package, and
+`logicboole check` prints these commands with its place on your computer when the board cannot be opened. From a
+copy of this repository, install it once with:
 
-    sudo cp software/udev/60-logic-boole.rules /etc/udev/rules.d/
+    sudo cp software/logicboole/udev/60-logic-boole.rules /etc/udev/rules.d/
     sudo udevadm control --reload
     sudo udevadm trigger
 
@@ -73,14 +78,14 @@ says so. The setting is "Allow accessories to connect", under Privacy & Security
 
 `--fake` in front of any command uses a stand-in for the board that makes an I²C bus on A0 and A1:
 
-    ./logicboole --fake
-    ./logicboole --fake capture bus.sr
+    logicboole --fake
+    logicboole --fake capture bus.sr
 
 The app also makes simulated signals of its own: pick "Simulated signals" as the source.
 
 ## The app
 
-    ./logicboole
+    logicboole
 
 This starts the app and opens `http://localhost:8016` in your browser. With a board on USB, the source is the
 board: pick a rate and a length, set the two thresholds, and press Start (or the space bar).
@@ -117,7 +122,7 @@ trust.
 
 ## The command line
 
-    ./logicboole capture bus.sr --rate 10M --time 2 -a 1.65 -b 0.9
+    logicboole capture bus.sr --rate 10M --time 2 -a 1.65 -b 0.9
 
 takes 2 seconds at 10 MS/s with pod A's threshold at 1.65 V and pod B's at 0.9 V, and writes `bus.sr`.
 
@@ -165,7 +170,7 @@ Ctrl-C ends a capture early and keeps what it has.
 **Triggers.** The FPGA looks for the trigger itself, in every sample it keeps, so nothing is missed between the
 board and the computer.
 
-    ./logicboole capture reset.sr --rate 200M --time 1ms --trigger "B0=f" --before 100us
+    logicboole capture reset.sr --rate 200M --time 1ms --trigger "B0=f" --before 100us
 
 | | |
 |---|---|
@@ -197,7 +202,7 @@ trigger. The board still looks at the inputs every 5 ns, and a sample is what th
 clock's edge: on one board, inputs that changed 15 ns or more before the edge were read at their new level every
 time, and inputs that changed about 5 ns before it were not.
 
-    ./logicboole capture spi.sr -n 100000 --clock B0=r
+    logicboole capture spi.sr -n 100000 --clock B0=r
 
 **The glitch filter.** With `--glitch 50ns`, a change of an input counts once the input has held its new level
 for 50 ns, and shorter pulses are removed before the samples are kept and before the trigger sees them. The
@@ -225,8 +230,8 @@ reads low. A Pi line is 3.3 V logic and the pod's threshold does not act on it. 
 and the glitch filter work on it under the channel's name (`A0=f` here: SDA falls). The saved files name the
 channel after the line, SDA, SCL, TXD and so on, and `decode` takes those names:
 
-    ./logicboole capture i2c.sr --rate 2M --time 1 --pi i2c --trigger "A0=f A1=1" --timeout 30
-    ./logicboole decode i2c.sr i2c scl=SCL sda=SDA
+    logicboole capture i2c.sr --rate 2M --time 1 --pi i2c --trigger "A0=f A1=1" --timeout 30
+    logicboole decode i2c.sr i2c scl=SCL sda=SDA
 
 This is in the FPGA's design from version 5 on. It has passed the design's simulation and the software's tests
 with the stand-in board; **it has not yet run on a board.**
@@ -237,12 +242,12 @@ nothing else, so `--fast` goes with `-t`, `-n`, `-a`, `-b`, `--raw` and `--test`
 length. The first capture with `--fast` loads the design, and the next capture without it loads the standard
 design again; the thresholds stay as they were. The inputs that are not taken read low in the capture.
 
-    ./logicboole capture --fast A0-A3 -t 10ms fast.lb16     # A0 to A3, 750 MS/s
-    ./logicboole capture --fast B -t 50ms pod-b.sr          # pod B, 375 MS/s
+    logicboole capture --fast A0-A3 -t 10ms fast.lb16     # A0 to A3, 750 MS/s
+    logicboole capture --fast B -t 50ms pod-b.sr          # pod B, 375 MS/s
 
 In Python it is `board.capture_fast("A0-A3", seconds=0.01)`, and the agent's server takes it as `capture` with
 `fast`. The app does not offer it yet.
-The design's bitstream is `logicboole/data/gateware-fast.bin`; [`../gateware/README.md`](../gateware/README.md)
+The design's bitstream is `logicboole/data/gateware-fast.bin`; [`../gateware/README.md`](https://github.com/mgwalkerjr95/logic-boole-16/blob/main/gateware/README.md)
 describes the design and its build. It has passed its self-test and captured clocks up to 85 MHz on one
 board; the gateware README has what was measured.
 
@@ -272,8 +277,8 @@ whole: 1 second at 100 MS/s is 200 MB in memory. Pick the lowest rate that shows
 
 **Measuring.** `measure` reads times off a saved capture:
 
-    ./logicboole capture bus.lb16 --rate 2M --time 1 -a 1.65
-    ./logicboole measure bus.lb16 A1
+    logicboole capture bus.lb16 --rate 2M --time 1 -a 1.65
+    logicboole measure bus.lb16 A1
 
     bus.lb16: 2 MS/s (a sample is 500 ns), from 0 s to 1 s
       A1: 23900 changes (11950 rising, 11950 falling); high at the start
@@ -281,7 +286,10 @@ whole: 1 second at 100 MS/s is 200 MB in memory. Pick the lowest rate that shows
           high for  4.5 us ... 17.288 ms, the median 5 us
           low for   4.5 us ... 5.5 us, the median 5 us
 
-The period is from one rising edge to the next, and the frequency is 1 / the median period. With no channel
+The period is from one rising edge to the next, and the frequency is 1 / the median period. A clock fast
+against the sample rate has periods of two lengths (a 200 MHz clock at 750 MS/s: 3 and 4 samples), so its
+median is held to one of them; for a steady clock the line also gives the average over all the periods, the
+precise figure (in the JSON, `average_frequency`, always there). With no channel
 named, `measure` takes the channels that change. `--from 10ms --to 12ms` looks at a part of the capture, and
 `--list 20` adds the first 20 changes one by one, across the channels in the order they happened. A time read
 off a capture is a whole number of samples, so it can be off by one sample at each of its ends.
@@ -291,7 +299,7 @@ off a capture is a whole number of samples, so it can be off by one sample at ea
 program (`brew install sigrok-cli` on macOS; `sudo apt install sigrok-cli` on Debian, Ubuntu and Raspberry Pi
 OS). Nothing else in the software needs it.
 
-    ./logicboole decode bus.lb16 i2c scl=A1 sda=A0 --limit 6
+    logicboole decode bus.lb16 i2c scl=A1 sda=A0 --limit 6
 
     bus.lb16: 2 MS/s, 2000000 samples.  i2c scl=A1 sda=A0 found 3300:
         0.000020000 s  start          Start
@@ -320,7 +328,7 @@ have is refused before sigrok-cli runs, with the names it does have.
 
 PulseView and `sigrok-cli` itself open the `.sr` files:
 
-    ./logicboole capture bus.sr --rate 2M --time 1 -a 1.65
+    logicboole capture bus.sr --rate 2M --time 1 -a 1.65
     sigrok-cli -i bus.sr -P i2c:scl=A1:sda=A0 -A i2c
 
 **For scripts.** `--json` on `info`, `inputs`, `threshold`, `capture`, `show`, `measure`, `decode` and
@@ -328,7 +336,7 @@ PulseView and `sigrok-cli` itself open the `.sr` files:
 a trigger, `trigger_sample` and `trigger_seconds` say where in the capture it is; they are `null` with no
 trigger, and when the trigger did not come.
 
-    ./logicboole capture --json --rate 1M --time 0.5 run.lb16
+    logicboole capture --json --rate 1M --time 0.5 run.lb16
 
 ```json
 {
@@ -403,7 +411,7 @@ for a in found["annotations"]:
 An AI agent that can run commands needs only the command line: with `--json` every answer is JSON, and
 `--fake` lets it try a command with no board. Two things make it easier.
 
-**The skill.** [`skills/logic-boole-16/SKILL.md`](skills/logic-boole-16/SKILL.md) tells an agent how to use the
+**The skill.** [`skills/logic-boole-16/SKILL.md`](https://github.com/mgwalkerjr95/logic-boole-16/blob/main/software/skills/logic-boole-16/SKILL.md) tells an agent how to use the
 board: the steps from a first look to a report, how to pick a rate and a threshold, the triggers, what the
 answers mean, and what to check when a channel shows nothing. It is an Agent Skill, a folder with one text
 file. For Claude Code, copy the folder to `~/.claude/skills/`, or to `.claude/skills/` in a project:
@@ -460,7 +468,7 @@ shorter than asked for and whole up to its last sample: there are no gaps inside
 
     python3 software/tests/test_host.py     # the Python side against the stand-in board; needs no sigrok-cli
     node software/tests/test_web.mjs        # the app's decoders and file formats (needs Node.js)
-    ./logicboole selftest                   # a real board: the whole path, every word compared
+    logicboole selftest                   # a real board: the whole path, every word compared
 
 ## Changing it
 
@@ -482,8 +490,8 @@ shorter than asked for and whole up to its last sample: there are no gaps inside
 | `logicboole/selftest.py` | The captures of `logicboole selftest` |
 | `logicboole/data/` | The FPGA bitstreams that are loaded into the board (`gateware.bin`, and `gateware-fast.bin` for the fast design), and the place for a firmware image of your own build |
 
-[`../docs/protocol.md`](../docs/protocol.md) describes the USB requests, the FPGA's registers and the stream.
-The firmware's source is in [`../firmware`](../firmware) and the FPGA's in [`../gateware`](../gateware); each
+[`../docs/protocol.md`](https://github.com/mgwalkerjr95/logic-boole-16/blob/main/docs/protocol.md) describes the USB requests, the FPGA's registers and the stream.
+The firmware's source is in [`../firmware`](https://github.com/mgwalkerjr95/logic-boole-16/tree/main/firmware) and the FPGA's in [`../gateware`](https://github.com/mgwalkerjr95/logic-boole-16/tree/main/gateware); each
 has a README on building it. `logicboole load --firmware FILE.img --gateware FILE.bin` runs a build of yours on
 the board without installing it.
 
@@ -497,8 +505,8 @@ Copyright (C) 2026 Michael Walker.
 The host software is free software: you can redistribute it and/or modify it under the terms of the GNU General
 Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option)
 any later version. It is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even
-the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See [LICENSE](LICENSE) for the GNU
+the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See [LICENSE](https://github.com/mgwalkerjr95/logic-boole-16/blob/main/software/LICENSE) for the GNU
 General Public License.
 
 The files in `logicboole/data/` that are loaded into the board come under the terms of what they are built
-from: see [logicboole/data/NOTICE.md](logicboole/data/NOTICE.md).
+from: see [logicboole/data/NOTICE.md](https://github.com/mgwalkerjr95/logic-boole-16/blob/main/software/logicboole/data/NOTICE.md).

@@ -40,30 +40,34 @@ the firmware, and the software for the computer. The picture is a render of the 
 
 <img src="docs/images/app.png" alt="The app in a browser: sixteen channels of waveforms on the left, and on the right the analyzers it found (SPI, I²C and two serial lines) with the messages they decoded">
 
-`./logicboole` opens the app in your browser: waveforms, a threshold for each pod, the trigger, and decoders
+`logicboole` opens the app in your browser: waveforms, a threshold for each pod, the trigger, and decoders
 for I²C, SPI and serial that it can find by itself. The picture shows the app's built-in simulated signals, which
-need no board: `./logicboole --fake` runs the whole software that way.
+need no board: `logicboole --fake` runs the whole software that way.
 
 ## Get started
 
 You need a Mac or a Linux computer (a Raspberry Pi 4 or 5 counts), Python 3.9 or later, and a USB 3 cable with
 a USB-C plug for the board. A board comes with no cable, leads, spacers or screws.
 
-**1. Get the software and libusb**
+**1. Install the software**
 
 ```sh
-git clone https://github.com/mgwalkerjr95/logic-boole-16.git
-cd logic-boole-16
+pipx install logicboole
 brew install libusb    # macOS only. Linux has libusb already
 ```
 
-On Linux, install the USB rule in [software/README.md](software/README.md) once, so that the board can be used
-without `sudo`. Nothing else is built or installed.
+To get pipx: `brew install pipx` on a Mac; `sudo apt install pipx` on Debian, Ubuntu and Raspberry Pi OS. Then
+`pipx ensurepath` once, and a new terminal. (`pip install logicboole` in a virtual environment does the same.)
+On Linux, the first `logicboole check` with the board plugged in prints the three commands that install the USB
+rule, so that the board can be used without `sudo`: run them once.
+
+From a copy of this repository nothing needs installing: `./logicboole`, in its top folder, does what
+`logicboole` does here.
 
 **2. Plug the board in and check it**
 
 ```sh
-./logicboole check
+logicboole check
 ```
 
 This checks the computer and the board in a few seconds and says what to do about anything that is missing.
@@ -74,19 +78,19 @@ keeps it: that once, the computer needs a connection to the internet.
 
 ```sh
 # The app, in your browser
-./logicboole
+logicboole
 
 # A capture to a file, with a threshold for each pod
-./logicboole capture bus.sr --rate 10M --time 2 -a 1.65 -b 0.9
+logicboole capture bus.sr --rate 10M --time 2 -a 1.65 -b 0.9
 
 # Wait for B0 to fall, and keep the millisecond after it
-./logicboole capture reset.sr --rate 200M --time 1ms --trigger "B0=f"
+logicboole capture reset.sr --rate 200M --time 1ms --trigger "B0=f"
 
 # What a protocol decoder finds in a saved capture
-./logicboole decode bus.lb16 i2c scl=A1 sda=A0
+logicboole decode bus.lb16 i2c scl=A1 sda=A0
 
 # Periods, frequencies and pulse lengths
-./logicboole measure bus.lb16
+logicboole measure bus.lb16
 ```
 
 Captures are saved for PulseView (`.sr`), a waveform viewer (`.vcd`), a spreadsheet (`.csv`), or as the app's own
@@ -99,7 +103,7 @@ Captures are saved for PulseView (`.sr`), a waveform viewer (`.vcd`), a spreadsh
 
 **Scripts and AI agents.** `import logicboole` is a Python package that needs only libusb, and the commands
 print JSON with `--json`. An AI agent can use the board by itself: through the command line with the skill file
-in `software/skills/logic-boole-16/`, or through `./logicboole mcp`, a Model Context Protocol server.
+in `software/skills/logic-boole-16/`, or through `logicboole mcp`, a Model Context Protocol server.
 [software/README.md](software/README.md) has every command, the triggers, the Python package, and setting up
 an agent.
 

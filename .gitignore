@@ -19,3 +19,7 @@ __pycache__/
 /gateware/sim/build/
 # macOS
 .DS_Store
+# Python packages, built by "python -m build" in software/
+software/dist/
+software/build/
+*.egg-info/

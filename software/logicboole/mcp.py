@@ -146,7 +146,11 @@ TOOLS = [
     tool("measure", "Measure a capture",
          "Reads times off a saved capture.  For each channel asked for: its level at the start, how many "
          "changes, and the period between rising edges, the time it stays high and the time it stays low, each "
-         "as min, median and max in seconds, with the frequency (1 / the median period) and the duty.  `list` "
+         "as min, median and max in seconds, with the frequency (1 / the median period), the average_frequency "
+         "(all the rising edges over the time they span) and the duty.  For a steady clock report "
+         "average_frequency: it is precise, where frequency is held to whole samples (a 200 MHz clock at 750 MS/s "
+         "has periods of 3 and 4 samples, so its median gives 187.5 MHz); for a bus that sends in bursts report "
+         "frequency, as the gaps lower the average.  `list` "
          "adds the changes themselves, one after the other.  All times are in seconds from the capture's start "
          "and are right to within one sample (`sample_seconds`).", FILE,
          texts("channels", "Channels, such as [\"A0\", \"B3\"].  Not given: those that change"),
