@@ -11,7 +11,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Logic Boole 16 (board revision C) preliminary datasheet, rev D</title>
+<title>Logic Boole 16 (board revision C) preliminary datasheet, rev E</title>
 <meta name="author" content="Michael Walker">
 <link rel="stylesheet" href="datasheet/fonts/fonts.css">
 <style>
@@ -30,7 +30,7 @@
   margin: 18mm 15mm 16mm 15mm;
   background: #ffffff;
   @top-left { content: "LOGIC BOOLE 16  ·  preliminary datasheet"; font: 700 7.2pt "Courier Prime", "Courier New", monospace; color: #46553a; vertical-align: bottom; padding-bottom: 2.5mm; }
-  @top-right { content: "Rev D  ·  2026-11-19  ·  board revision C"; font: 400 7.2pt "Courier Prime", "Courier New", monospace; color: #4a4d40; vertical-align: bottom; padding-bottom: 2.5mm; }
+  @top-right { content: "Rev E  ·  2026-11-19  ·  board revision C"; font: 400 7.2pt "Courier Prime", "Courier New", monospace; color: #4a4d40; vertical-align: bottom; padding-bottom: 2.5mm; }
   @bottom-left { content: "© 2026 Michael Walker. Open hardware, CERN-OHL-S v2. Preliminary: subject to change."; font: 400 7pt "Archivo", Arial, sans-serif; color: #4a4d40; vertical-align: top; padding-top: 3mm; }
   @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 700 7.2pt "Courier Prime", "Courier New", monospace; color: #46553a; vertical-align: top; padding-top: 3mm; }
 }
@@ -201,7 +201,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
     </div>
     <p class="sub">Sixteen channels at 200&nbsp;MS/s, or four at 750&nbsp;MS/s, over USB&nbsp;3, through 1&nbsp;MΩ inputs for 1.2 to 5&nbsp;V logic. It runs from one USB-C cable on a computer, or mounted on a Raspberry Pi 4 or 5 as a HAT+. Open source: the board, the FPGA design, the firmware and the software.</p>
   </div>
-  <div class="rev"><span class="flag">PRELIMINARY</span><br>Datasheet <b>rev D</b><br>2026-11-19<br>Board <b>revision C</b></div>
+  <div class="rev"><span class="flag">PRELIMINARY</span><br>Datasheet <b>rev E</b><br>2026-11-19<br>Board <b>revision C</b></div>
 </header>
 
 <div class="stats">
@@ -787,7 +787,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
   <div>
     <div class="tip" style="margin-top:4.5mm">
       <div class="h">How it is set</div>
-      <p>In the app, or from the command line. <code>./logicboole capture reset.sr --rate 200M --time 1ms --trigger "B0=f"</code> waits for B0 to fall and keeps the millisecond after it, with some of what came before. Section 11 has the software.</p>
+      <p>In the app, or from the command line. <code>logicboole capture reset.sr --rate 200M --time 1ms --trigger "B0=f"</code> waits for B0 to fall and keeps the millisecond after it, with some of what came before. Section 11 has the software.</p>
       <p>On a Raspberry Pi with the bus jumpers closed, <code>--pi i2c</code>, <code>uart</code>, <code>spi</code> or <code>all</code> puts the Pi's own lines in place of channels (section 5).</p>
     </div>
   </div>
@@ -813,10 +813,10 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
 <h3>With a computer</h3>
 <ol>
   <li><b>Read section 9, Probing and safety.</b> The analyzer's ground is the host's ground.</li>
-  <li><b>Get the software</b>: download the repository (section 12) and open a terminal in its folder. It needs Python 3.9 or later and libusb. Nothing in it is built or installed.</li>
+  <li><b>Get the software</b>: <code>pipx install logicboole</code>. It needs Python 3.9 or later and libusb: <code>brew install pipx libusb</code> on a Mac, <code>sudo apt install pipx</code> on Linux and Raspberry Pi OS, then <code>pipx ensurepath</code>. A copy of the repository (section 12) runs the same commands as <code>logicboole</code>, with nothing installed.</li>
   <li><b>Set the board down on something that doesn't conduct</b>, or mount it on M2.5 standoffs.</li>
   <li><b>Plug the USB-C cable into the board and into a USB&nbsp;3 port.</b> PWR lights.</li>
-  <li><b>Run <code>./logicboole check</code>.</b> It checks the computer, loads the board, which the software does every time the board connects, and says what to do about anything that is missing. ARM then blinks. <code>./logicboole</code> opens the app in your browser.</li>
+  <li><b>Run <code>logicboole check</code>.</b> It checks the computer, loads the board, which the software does every time the board connects, and says what to do about anything that is missing. ARM then blinks. <code>logicboole</code> opens the app in your browser.</li>
   <li><b>Connect ground first</b>: a lead from an even pin of each pod you use to the ground of the circuit under test. Then connect the signals to the odd pins.</li>
   <li><b>Set each pod's threshold</b> to half the logic level of the signals on it (section 6).</li>
   <li><b>Choose a sample rate and a trigger, and start the capture.</b> ARM is on while the analyzer waits for its trigger, and TRIG when it has fired.</li>
@@ -827,7 +827,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
   <li><b>Put the signals on one group of four</b>: A0–A3, A4–A7, B0–B3 or B4–B7. Signals whose timing you compare to the nanosecond belong on one pod (section 13).</li>
   <li><b>Keep the leads short</b> above about 25&nbsp;MHz, 10&nbsp;cm or less, with a ground lead from the pod's even pins beside the signals. Long leads ring, and a long shared ground lets one signal's edges disturb another's.</li>
   <li><b>Set the pod's threshold to half the logic level.</b> At 200&nbsp;MHz the inputs see a rounded clock, and a threshold far from the middle loses periods.</li>
-  <li><b>Run <code>./logicboole capture fast.sr --fast A0-A3 --time 10ms</code></b> and open <code>fast.sr</code> in PulseView. <code>--fast A</code> or <code>--fast B</code> takes a whole pod at 375&nbsp;MS/s. The fast design has no trigger: the capture starts at once.</li>
+  <li><b>Run <code>logicboole capture fast.sr --fast A0-A3 --time 10ms</code></b> and open <code>fast.sr</code> in PulseView. <code>--fast A</code> or <code>--fast B</code> takes a whole pod at 375&nbsp;MS/s. The fast design has no trigger: the capture starts at once.</li>
 </ol>
 
 <h3 style="break-before:page;margin-top:0">On a Raspberry Pi</h3>
@@ -994,9 +994,9 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
     <tr><td class="p">Triggering a scope</td><td>Trigger header pin 2 to the scope's external trigger (C)</td><td>The scope then shows the analog signal around the logic event that the analyzer found</td></tr>
     <tr><td class="p">Started by another instrument</td><td>Its 3.3 V output to trigger header pin 1, and the trigger input as a stage</td><td>The capture triggers when the other instrument fires</td></tr>
     <tr><td class="p">The Pi's own buses</td><td>Board on a Pi (B), bus jumpers closed</td><td><code>--pi i2c</code>, <code>uart</code> or <code>spi</code>: the Pi's lines in place of channels, with no leads (section 5)</td></tr>
-    <tr><td class="p">Decoding a bus</td><td>A saved capture, and <code>sigrok-cli</code> installed</td><td><code>./logicboole decode bus.lb16 i2c scl=A1 sda=A0</code> lists what one of sigrok's decoders finds</td></tr>
+    <tr><td class="p">Decoding a bus</td><td>A saved capture, and <code>sigrok-cli</code> installed</td><td><code>logicboole decode bus.lb16 i2c scl=A1 sda=A0</code> lists what one of sigrok's decoders finds</td></tr>
     <tr><td class="p">Unattended capture on a Pi</td><td>Board on a Pi (B), with no screen</td><td>Captures from the command line over SSH, with JSON results for a script, or the app opened from another computer</td></tr>
-    <tr><td class="p">Scripts and AI agents</td><td><code>import logicboole</code>, or <code>./logicboole mcp</code></td><td>A Python package for scripts. For AI agents, a Model Context Protocol server and a skill file</td></tr>
+    <tr><td class="p">Scripts and AI agents</td><td><code>import logicboole</code>, or <code>logicboole mcp</code></td><td>A Python package for scripts. For AI agents, a Model Context Protocol server and a skill file</td></tr>
   </tbody>
 </table>
 <div class="tip">
@@ -1252,16 +1252,16 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
     <h3>Host software</h3>
     <p>One Python package that needs Python 3.9 or later and libusb, and nothing else. It runs from its folder: nothing is built or installed.</p>
     <ul>
-      <li><b>The app</b>: <code>./logicboole</code> opens it in a browser, with the waveforms, each pod's threshold, the trigger and the decoders.</li>
+      <li><b>The app</b>: <code>logicboole</code> opens it in a browser, with the waveforms, each pod's threshold, the trigger and the decoders.</li>
       <li><b>The command line</b>: <code>check</code>, <code>capture</code>, <code>decode</code>, <code>measure</code>, <code>selftest</code> and more, with JSON output for scripts.</li>
       <li><b>A Python package</b>: <code>import logicboole</code>.</li>
       <li><b>Files</b>: <code>.sr</code> for PulseView and sigrok-cli, <code>.vcd</code>, <code>.csv</code>, and its own <code>.lb16</code>.</li>
       <li><b>Decoders</b>: sigrok's, more than a hundred, through <code>sigrok-cli</code> if it is installed.</li>
-      <li><b>For AI agents</b>: <code>./logicboole mcp</code>, a Model Context Protocol server, and a skill file.</li>
+      <li><b>For AI agents</b>: <code>logicboole mcp</code>, a Model Context Protocol server, and a skill file.</li>
       <li><b>The fast design</b>: <code>capture --fast</code>, from the command line, in Python and through the MCP server. The app does not offer it yet.</li>
       <li><b>With no board</b>: <code>--fake</code> runs all of it on a stand-in.</li>
     </ul>
-    <p><code>./logicboole selftest</code> checks the whole path from the FPGA to the host: 34 captures of a test pattern, with every word compared. <code>selftest --fast</code> does the same with the fast design.</p>
+    <p><code>logicboole selftest</code> checks the whole path from the FPGA to the host: 34 captures of a test pattern, with every word compared. <code>selftest --fast</code> does the same with the fast design.</p>
   </div>
 </div>
 <h3>Programming and debug pads</h3>
@@ -1331,7 +1331,8 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
     <tr><td class="p">Trigger header</td><td>Board 1</td><td>TRIG OUT in 600 captures and TRIG IN in 2,000, from 100 kHz to 50 MHz</td></tr>
     <tr><td class="p">USB</td><td>Board 1</td><td>5 Gbit/s with the plug either way up. 384 MB/s in a capture, and 44 MB/s over USB 2.0 for 20 s</td></tr>
     <tr><td class="p">Current</td><td>Board 1</td><td>0.18 A while streaming, with an earlier test design. Before they are loaded, boards 1 and 2 both draw 0.05 A</td></tr>
-    <tr><td class="p">On a Raspberry Pi 5</td><td>Board 1</td><td>On the header and the spacers, powered from the header and from USB-C: 391 MB/s for 10 minutes with every word right, with an earlier test design</td></tr>
+    <tr><td class="p">On a Raspberry Pi 5</td><td>Board 1</td><td>On the header and the spacers. The self-test passes, and so does the fast design&rsquo;s, its raw captures at 365 to 376 MB/s. With an earlier test design, 391 MB/s for 10 minutes with every word right</td></tr>
+        <tr><td class="p">The Pi&rsquo;s own buses</td><td>Board 1 on a Pi 5, JP2 to JP10 closed</td><td>Each of the nine lines, switched from the Pi, shows on its own channel and on no other. An <code>i2cdetect</code> scan decodes as all 112 addresses it asks for; bytes on SPI0&rsquo;s two chip selects and 32 UART bytes at 115200 baud read as sent</td></tr>
   </tbody>
 </table>
 <h3>Known limits</h3>
@@ -1445,6 +1446,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
         <tr><td class="p">B</td><td>2026-11-17</td><td>Figures measured on the first boards in place of design figures. Capture, triggers, glitch filter and capture clock as built: revision A's burst buffer is not built and is gone; capture of the Pi's bus lines is in the FPGA design, in place of pod channels. The software, and the open-source release (section 12)</td></tr>
         <tr><td class="p">C</td><td>2026-11-18</td><td>Only the board is in the box: a USB cable, and spacers and screws for a Raspberry Pi, are the customer's to get (sections 1 and 7). A new look, in the typefaces and colors of the shop pages</td></tr>
         <tr><td class="p">D</td><td>2026-11-19</td><td>The fast FPGA design: 4 channels at 750 MS/s, 8 at 375 MS/s and 16 at 187.5 MS/s, measured on board 1 (sections 1, 2, 6, 11 and 13)</td></tr>
+        <tr><td class="p">E</td><td>2026-11-19</td><td>Measured on a Pi 5; installs with pipx (sections 7 and 13)</td></tr>
       </tbody>
     </table>
   </div>

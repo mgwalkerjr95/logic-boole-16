@@ -32,7 +32,7 @@ the firmware, and the software for the computer. The picture is a render of the 
 | **Streams to the host** | Samples go over USB 3 as they are taken, not into a small buffer on the board. The longest capture so far is 600 million samples |
 | **Protected inputs** | 1 MΩ, with a comparator on every channel, designed for ±25 V |
 | **One cable** | Power and data on USB-C, about 1 W |
-| **Raspberry Pi HAT+** | Stacks on a Pi 4 or 5 with room for the Pi 5's Active Cooler. The Pi's own I²C, UART and SPI lines can take the place of pod channels, with no leads, once the board's solder jumpers are closed (simulated; not yet run on a board) |
+| **Raspberry Pi HAT+** | Stacks on a Pi 4 or 5 with room for the Pi 5's Active Cooler. The Pi's own I²C, UART and SPI lines can take the place of pod channels, with no leads, once the board's solder jumpers are closed |
 | **Nothing to brick** | The board keeps no firmware: the software loads it over USB each time it is plugged in |
 | **Decoders, scripts and AI agents** | I²C, SPI and serial in the app, [sigrok](https://sigrok.org)'s decoders from the command line, a Python package, and an MCP server |
 

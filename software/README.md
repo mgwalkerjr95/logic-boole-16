@@ -233,8 +233,9 @@ channel after the line, SDA, SCL, TXD and so on, and `decode` takes those names:
     logicboole capture i2c.sr --rate 2M --time 1 --pi i2c --trigger "A0=f A1=1" --timeout 30
     logicboole decode i2c.sr i2c scl=SCL sda=SDA
 
-This is in the FPGA's design from version 5 on. It has passed the design's simulation and the software's tests
-with the stand-in board; **it has not yet run on a board.**
+This is in the FPGA's design from version 5 on. On board 1 on a Raspberry Pi 5, an `i2cdetect` scan, SPI bytes
+on both chip selects and UART bytes were captured this way and decoded as sent (`../gateware/README.md` has the
+figures).
 
 **The fast design** (`--fast`). The FPGA can be loaded with a second design that takes fewer inputs more often:
 four inputs every 1.33 ns, a pod every 2.67 ns, or all 16 every 5.33 ns. It takes samples and sends them and has

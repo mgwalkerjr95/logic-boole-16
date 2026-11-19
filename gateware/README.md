@@ -295,10 +295,19 @@ To check the file (on macOS the command is `shasum -a 256`):
 
     sha256sum ../software/logicboole/data/gateware.bin
 
-**On a board.** Version 5 has passed the simulation above and **has not yet run on a board**. It differs from
-version 4 in one place: a selector in front of nine of the inputs, for the Pi's lines. The Pi's lines themselves
-have not been captured on a board either. What follows was measured with version 4 on one board, connected to
-a Mac:
+**On a board.** Version 5 differs from version 4 in one place: a selector in front of nine of the inputs, for
+the Pi's lines. It has run on board 1 on a Raspberry Pi 5, with the nine bus jumpers JP2 to JP10 closed:
+
+- `logicboole selftest` passes, every word of every capture right, and so does `logicboole selftest --fast`,
+  its raw captures arriving at 365 to 376 MB/s through the Pi's USB 3 port.
+- Each of the nine lines, switched up and down from the Pi with `pinctrl`, shows on its own channel (SDA on A0
+  ... CE1 on B0) and on no other: 410 to 517 changes on that channel, none on the other eight.
+- The Pi's own buses, captured with `--pi` and a trigger and decoded: an `i2cdetect -y 1` scan, caught on its
+  start condition, reads as all 112 addresses it asks for, 0x08 to 0x77; 16 bytes sent to each of SPI0's two
+  chip selects at 1 MHz read back as sent; 32 bytes at 115200 baud from the UART on GPIO14 read as sent, every
+  edge there.
+
+What follows was measured with version 4 on one board, connected to a Mac:
 
 - `logicboole selftest` passes: 34 captures of the test pattern with every word compared, among them 600 million
   samples at 200 MS/s, and 200 million samples at 200 MS/s that make 50 million words a second. Eight of them wait
