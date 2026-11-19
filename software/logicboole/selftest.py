@@ -187,12 +187,13 @@ def selftest_fast(board, log=print, scale=1.0):
     for inputs, fmt, shift, seconds, how in cases:
         per = F.mode_of(inputs).per
         if how in ("whole", "count"):       # a number of frames, not seconds
-            cap = board.capture_fast(inputs, samples=seconds * per, fmt=fmt, test=shift)
+            cap = board.capture_fast(inputs, samples=seconds * per, fmt=fmt, test=shift, keep=False)
         elif how:
             end = time.monotonic() + seconds * scale
-            cap = board.capture_fast(inputs, samples=0, fmt=fmt, test=shift, cancel=lambda: time.monotonic() >= end)
+            cap = board.capture_fast(inputs, samples=0, fmt=fmt, test=shift, keep=False,
+                                     cancel=lambda: time.monotonic() >= end)
         else:
-            cap = board.capture_fast(inputs, seconds=seconds * scale, fmt=fmt, test=shift)
+            cap = board.capture_fast(inputs, seconds=seconds * scale, fmt=fmt, test=shift, keep=False)
         problems = list(cap.problems)
         if how == "whole" and cap.overflow:
             problems.append("it overflowed, and is small enough for the board's own buffers")

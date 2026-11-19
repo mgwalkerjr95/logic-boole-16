@@ -14,6 +14,7 @@ other is running; the thresholds are kept across the change.
 docs/protocol.md describes every request and register used here.
 """
 import hashlib
+from array import array
 import os
 import shlex
 import struct
@@ -779,7 +780,7 @@ class Board:
     # ---- a capture with the fast design ----
 
     def capture_fast(self, inputs="A0-A3", seconds=0.01, samples=None, fmt="rle", test=None, a=None, b=None,
-                     max_bytes=MAX_BYTES, progress=None, cancel=None, log=None):
+                     max_bytes=MAX_BYTES, progress=None, cancel=None, log=None, keep=True):
         """One capture with the fast design (fast.py), as a Capture.  The fast design is loaded first if the
         standard one runs.
 
@@ -793,6 +794,9 @@ class Board:
                     (fast.py), shifted right by that many bits.  Every word that arrives is then compared with it
         a, b        thresholds for pod A and pod B in volts, if they are to change
         progress, cancel    as in capture()
+        keep        False, with test: the words are checked but not turned into samples, and the Capture holds one
+                    run of the right length.  The test pattern changes in nearly every sample, so two seconds of
+                    it at 750 MS/s are 1.5 billion runs (15 GB): the self-test passes False
 
         There is no trigger, glitch filter, capture clock or Pi line here.  Look at the capture's `problems` (or
         `ok`) and at `overflow`: an overflowed capture is shorter than asked for, but whole up to its last sample.
@@ -924,7 +928,11 @@ class Board:
         # the samples.  A capture that ran to its end has as many as were asked for: of its last frame, those
         # beyond that number are left out
         whole = bool(frames) and held == frames
-        values, lengths = F.sample_runs(*W.runs_of(data, fmt, held), mode, samples if whole else held * mode.per)
+        n = samples if whole else held * mode.per
+        if test is not None and not keep:
+            values, lengths = (array("H", [0]), array("Q", [n])) if n else (array("H"), array("Q"))
+        else:
+            values, lengths = F.sample_runs(*W.runs_of(data, fmt, held), mode, n)
         info = {"time": started, "format": fmt, "test": test, "words": count, "read_seconds": round(t1 - t0, 3),
                 "usb": LINK.get(s["speed"], "?"), "fifo_max": r["fifo_max"], "fifo_size": 1 << r["fifo_bits"],
                 "samples_asked": samples, "link_errors": link, "fast": mode.name, "inputs": mode.channels,
