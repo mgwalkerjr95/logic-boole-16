@@ -7,6 +7,10 @@ The board keeps nothing when it loses power.  Plugged in, its FX3 runs the boot 
 computer sends the firmware (data/firmware.img) into the FX3's RAM, then has the firmware load the FPGA's design
 (data/gateware.bin).  connect() does both when they are needed, which takes about three seconds.
 
+There is a second design for the FPGA, the fast one (data/gateware-fast.bin, fast.py): fewer inputs, more samples
+a second, and nothing but that.  capture_fast() loads it and capture() loads the standard one again, each when the
+other is running; the thresholds are kept across the change.
+
 docs/protocol.md describes every request and register used here.
 """
 import hashlib
@@ -16,12 +20,13 @@ import sys
 import time
 import urllib.request
 
-from . import trigger as T, usb, words as W
+from . import fast as F, trigger as T, usb, words as W
 from .capture import CHANNELS, Capture
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 FIRMWARE = os.path.join(HERE, "data", "firmware.img")      # an image put here is used as it is ("make install")
 GATEWARE = os.path.join(HERE, "data", "gateware.bin")
+GATEWARE_FAST = os.path.join(HERE, "data", "gateware-fast.bin")    # the fast design (fast.py)
 
 # The firmware image this software was written for.  It holds code of Infineon's SDK, so where it is not beside
 # this file it is downloaded once, checked against this SHA-256 and kept: firmware_image().
@@ -52,6 +57,7 @@ PORT_ERRORS = {5: "a word arrived with no buffer to take it", 0x12: "the socket 
 # the FX3's RAM, where an image's sections may go
 RAM = range(0x40003000, 0x40080000)
 TCM = range(0x00000100, 0x00004000)
+IN_USE = "A capture is running: is another program using the board?"
 NO_ACCESS = ("The board is on USB, but this user may not open it.  Install the udev rule once: "
              "sudo cp software/udev/60-logic-boole.rules /etc/udev/rules.d/ && sudo udevadm control --reload "
              "&& sudo udevadm trigger")
@@ -253,18 +259,24 @@ def look(backend=usb):
         out.update(state="ready", design=r["version"], threshold_a=round(volts(r["duty_a"]), 3),
                    threshold_b=round(volts(r["duty_b"]), 3), inputs=r["inputs"],
                    text="Ready: USB at %s.%s" % (out["link"], slow))
+        if r["design"] == "fast":           # the next capture() loads the standard design again
+            out.update(fast=True, text="Ready, with the fast design loaded: USB at %s.%s" % (out["link"], slow))
         return out
     finally:
         board.close()
 
 
-def connect(load=True, log=None, backend=usb, firmware=None, gateware=GATEWARE, reload=False):
+def connect(load=True, log=None, backend=usb, firmware=None, gateware=GATEWARE, reload=False,
+            fast_gateware=None):
     """The board, ready for a capture, as a Board.  Close it when done (or use it in a "with").
 
     load     load the firmware and the FPGA's design if they are not running (about three seconds)
     reload   load both even if they are running: for trying a firmware or a design you have built
     log      a function that is given a line of text for each step, if you want to see them
     firmware an image of your own; otherwise the one this software was written for (firmware_image())
+    gateware, fast_gateware     bitstreams of your own for the standard design and for the fast one
+
+    A board that runs the fast design is left as it is: capture() loads the standard design when it needs it.
     """
     dev = backend.open_device(VID, PID_FIRMWARE)
     if dev is not None and reload:
@@ -305,7 +317,9 @@ def connect(load=True, log=None, backend=usb, firmware=None, gateware=GATEWARE, 
             dev = backend.open_device(VID, PID_FIRMWARE, wait=7)
         if dev is None:
             raise BoardError("The firmware did not appear on USB: unplug the board and plug it in again.")
-    board = Board(dev)
+    # (the stand-in board has a "bitstream" of its own making for the fast design)
+    board = Board(dev, {"standard": gateware,
+                        "fast": fast_gateware or getattr(backend, "fast_gateware", None) or GATEWARE_FAST})
     try:
         s = board.status()
         if reload or not s["pins"] >> DONE & 1 or board.registers() is None:
@@ -325,8 +339,12 @@ class Board:
             "cfg_clocks cfg_ms linkfail resets pib_errors pib_first pib_last kb count pin pin_count i2c "
             "fpga_version fpga_status").split()
 
-    def __init__(self, device):
+    def __init__(self, device, designs=None):
         self.dev = device
+        self.designs = {"standard": GATEWARE, "fast": GATEWARE_FAST}       # a file, or the bitstream's bytes
+        self.fast_reversed = False          # a bench check of the fast design: the four samples that a pad hands
+                                            # over at once are taken in the opposite order (its register 08, bit 4)
+        self.designs.update(designs or {})
 
     def __enter__(self):
         return self
@@ -364,12 +382,22 @@ class Board:
         self._send(0xD0, register, 0, bytes(data), what="writing the FPGA's register %02X" % register)
 
     def registers(self):
-        """The FPGA's registers as a dict, or None if the FPGA does not answer as this project's design."""
+        """The FPGA's registers as a dict, or None if the FPGA does not answer as one of this project's designs.
+        "design" is "standard" or "fast".  The fast design counts frames where the standard one counts samples
+        ("limit", "samples"), and has "mode" (its register 08) in place of the divider and the trigger."""
         r = self.read(0, 0x40)
-        if r is None or len(r) < 0x40 or r[0:3] != DESIGN_ID:
+        if r is None or len(r) < 0x40 or r[0:3] not in (DESIGN_ID, F.ID):
             return None
         n = lambda a, b: int.from_bytes(r[a:b], "little")       # noqa: E731
-        return {"version": r[3], "control": r[4], "status": r[5], "inputs": n(6, 8), "divider": n(8, 11),
+        if r[0:3] == F.ID:
+            return {"design": "fast", "version": r[3], "control": r[4], "status": r[5], "inputs": n(6, 8),
+                    "mode": r[8], "duty_a": n(12, 14), "duty_b": n(14, 16), "limit": n(16, 21),
+                    "samples": n(24, 29), "burst": n(32, 34), "fifo_max": n(34, 36), "words": n(36, 42),
+                    "gave_up": r[42] & 1, "fifo_bits": r[43], "fastest": n(44, 46) * 1e6, "locked": r[5] & 1,
+                    "run": r[5] >> 1 & 1, "sampling": r[5] >> 2 & 1, "done": r[5] >> 3 & 1,
+                    "overflow": r[5] >> 4 & 1, "state": r[5] >> 5, "other_pins": n(0x2E, 0x30)}
+        return {"design": "standard",
+                "version": r[3], "control": r[4], "status": r[5], "inputs": n(6, 8), "divider": n(8, 11),
                 "duty_a": n(12, 14), "duty_b": n(14, 16), "limit": n(16, 21), "samples": n(24, 29),
                 "burst": n(32, 34), "fifo_max": n(34, 36), "words": n(36, 42), "gave_up": r[42] & 1,
                 "fifo_bits": r[43], "fastest": (r[44] or 100) * 1e6, "locked": r[5] & 1, "run": r[5] >> 1 & 1,
@@ -397,9 +425,13 @@ class Board:
     # ---- loading ----
 
     def load_fpga(self, path=GATEWARE, log=None):
-        """Has the FX3 load the FPGA with the bitstream at path (a .bin file), and checks that the design runs."""
-        with open(path, "rb") as f:
-            data = f.read()
+        """Has the FX3 load the FPGA with the bitstream at path (a .bin file), and checks that the design runs.
+        The FPGA may be running a design already: it is cleared first."""
+        if isinstance(path, bytes):         # the bitstream itself (the stand-in board's)
+            data, path = path, "The bitstream"
+        else:
+            with open(path, "rb") as f:
+                data = f.read()
         if b"\xAA\x99\x55\x66" not in data[:256]:
             raise BoardError("%s is not an FPGA bitstream (a .bin file is needed)." % path)
         self._send(0xB3, what="starting the FPGA's configuration")
@@ -422,6 +454,29 @@ class Board:
         if log:
             log("FPGA: %d bytes loaded in %.2f s; design version %d runs"
                 % (len(data), s["cfg_ms"] * TICK, r["version"]))
+
+    def use(self, design, log=None):
+        """Has the FPGA run the "standard" design or the "fast" one, and returns its registers.  If the other one
+        runs, this one is loaded in its place (the log says how long that took) and the thresholds are set again
+        to what they were."""
+        r = self.registers()
+        if r is not None and r["design"] == design:
+            return r
+        if self.status()["flags"] & 0x30:   # a stream is started or RUN is high: leave the FPGA alone
+            raise BoardError(IN_USE)
+        source = self.designs[design]
+        if not isinstance(source, bytes) and not os.path.exists(source):
+            raise BoardError("The %s design's file is not there (%s).  gateware/README.md says how it is built."
+                             % (design, source))
+        self.load_fpga(source, log)
+        if r is not None and (r["duty_a"], r["duty_b"]) != (2048, 2048):       # a design starts with 2048 and 2048
+            self.write(0x0C, struct.pack("<HH", r["duty_a"], r["duty_b"]))
+        time.sleep(SETTLE)                  # the thresholds' filters lost their PWM while the FPGA was loaded
+        r = self._need()
+        if r["design"] != design:
+            raise BoardError("%s is not the %s design." % (source if isinstance(source, str) else "What was loaded",
+                                                           design))
+        return r
 
     def unload(self):
         """Sends the FX3 back to its boot loader: the board is then as it is after being plugged in."""
@@ -511,7 +566,7 @@ class Board:
         s = self.status()
         if not s["pins"] >> DONE & 1:
             raise BoardError("The FPGA is not loaded.")
-        r = self._need()
+        r = self.use("standard")            # (loads it if the fast design runs)
         divider, rate = nearest_rate(rate, r["fastest"])
         clock_reg, clock = T.clock_register(clock)
         stages = T.stages_of(trigger, None if clock_reg else rate)
@@ -542,7 +597,7 @@ class Board:
             raise BoardError("What is kept before the trigger cannot be less than nothing.")
         keep = T.ring_words(samples_before, fmt, (1 << r["fifo_bits"]) - 8)
         if r["state"] or s["flags"] & 0x30:
-            raise BoardError("A capture is running: is another program using the board?")
+            raise BoardError(IN_USE)
         if a is not None or b is not None:
             self.set_thresholds(a, b)
         control = (1 if fmt == "rle" else 0) | (2 | test << 4 if test is not None else 0)
@@ -718,3 +773,161 @@ class Board:
         for k, names in T.pi_names(lines).items():
             cap.names[k] = names[1]
         return cap
+
+    # ---- a capture with the fast design ----
+
+    def capture_fast(self, inputs="A0-A3", seconds=0.01, samples=None, fmt="rle", test=None, a=None, b=None,
+                     max_bytes=MAX_BYTES, progress=None, cancel=None, log=None):
+        """One capture with the fast design (fast.py), as a Capture.  The fast design is loaded first if the
+        standard one runs.
+
+        inputs      which inputs, and with that how fast: "A0-A3", "A4-A7", "B0-B3" or "B4-B7" at 750 MS/s, "A" or
+                    "B" (a pod) at 375 MS/s, "all" at 187.5 MS/s.  The other inputs read low in the capture
+        seconds     how long.  The FPGA counts, so the length is exact
+        samples     how many samples, in place of seconds.  0: no limit; the capture then runs until cancel()
+                    says so, until it has max_bytes of data, or until it overflows
+        fmt         "rle" (a word for each 5.33 ns in which an input changed) or "raw" (every sample is sent)
+        test        None for the inputs.  0 ... 15 for the FPGA's test pattern instead: a counter of the frames
+                    (fast.py), shifted right by that many bits.  Every word that arrives is then compared with it
+        a, b        thresholds for pod A and pod B in volts, if they are to change
+        progress, cancel    as in capture()
+
+        There is no trigger, glitch filter, capture clock or Pi line here.  Look at the capture's `problems` (or
+        `ok`) and at `overflow`: an overflowed capture is shorter than asked for, but whole up to its last sample.
+        The raw format makes 93.75 million words a second, nearly all that the board and USB carry, so a long raw
+        capture needs a computer that reads without a pause; the run-length format makes more than that only
+        from signals that change in most 5.33 ns periods."""
+        mode = F.mode_of(inputs)
+        if fmt not in ("rle", "raw"):
+            raise BoardError('The format is "rle" or "raw".')
+        if test is not None and not 0 <= test <= 15:
+            raise BoardError("The test pattern's shift is 0 ... 15.")
+        if not self.status()["pins"] >> DONE & 1:
+            raise BoardError("The FPGA is not loaded.")
+        r = self.use("fast", log)
+        s = self.status()
+        rate = mode.rate(r["fastest"])
+        if samples is None:
+            samples = round(seconds * rate)
+            if samples < 1:
+                raise BoardError("The capture is shorter than one sample.")
+        frames = -(-samples // mode.per)    # the design takes whole frames: the samples of 5.33 ns
+        if not 0 <= frames < 1 << 40:
+            raise BoardError("A capture has less than 2^40 frames.")
+        if r["state"] or s["flags"] & 0x30:
+            raise BoardError(IN_USE)
+        if a is not None or b is not None:
+            self.set_thresholds(a, b)
+        control = (1 if fmt == "rle" else 0) | (2 | test << 4 if test is not None else 0)
+        self.write(0x04, [control])
+        mode_byte = mode.register | (16 if self.fast_reversed else 0)
+        self.write(0x08, [mode_byte])
+        self.write(0x10, frames.to_bytes(5, "little"))
+        self.write(0x20, (BUFFER_KB * 256).to_bytes(2, "little"))
+        r = self._need()
+        if (r["control"], r["mode"], r["limit"], r["burst"]) != (control, mode_byte, frames, BUFFER_KB * 256):
+            raise BoardError("The FPGA's registers did not take the capture's settings.")
+        self._send(0xC0, what="starting the FX3's parallel port")
+        if s["speed"] == 3:
+            self.link_errors()              # clears the counts
+        if not self.dev.claim():
+            raise BoardError("Another program has the board open.")
+        parts = []                          # each read's data, copied as it arrives
+        reader, finished = None, False
+        limit = samples / rate * 1.2 + 3 if samples else None       # seconds: later, something is wrong
+        why = "time"
+        started = time.strftime("%Y-%m-%d %H:%M:%S")
+        try:
+            self._send(0xC3, what="stopping the old stream")
+            self._send(0xC2, BUFFER_KB, BUFFERS, what="starting the stream")
+            reader = self.dev.reader(EP_IN, lambda view: parts.append(bytes(view)))
+            self._send(0xC4, 1, what="raising RUN")
+            t0 = asked = time.monotonic()
+            while not reader.failed and reader.sink_error is None:
+                reader.pump(5)
+                t = time.monotonic()
+                if cancel is not None and cancel():
+                    why = "stopped"
+                    break
+                if reader.bytes >= max_bytes:
+                    why = "size"
+                    break
+                if limit is not None and t - t0 >= limit:
+                    break
+                if t - asked >= 0.02:       # the FPGA's status comes with the firmware's: "done" is bit 3
+                    asked = t
+                    raw = self.dev.get(0xB0, 0, 0, 64, 1000)
+                    if raw is not None and raw[7] & 64 and raw[63] & 8:
+                        why = "done"
+                        break
+                    if progress is not None and samples:
+                        progress(min((t - t0) * rate / samples, 1.0))
+            t1 = time.monotonic()
+            reader.ending = True
+            self._send(0xC4, 0, what="lowering RUN")        # the FPGA sends what it still holds
+            self._send(0xC5, what="ending the stream")      # the FX3 passes on its last buffer, then an empty packet
+            reader.last_data = time.monotonic()
+            while (not reader.ended and not reader.failed and time.monotonic() - reader.last_data < 1.0
+                   and time.monotonic() - t1 < 5.0):
+                reader.pump(5)
+            finished = True
+        finally:
+            if not finished:                # it failed part-way: RUN low, whatever happened
+                self.dev.out(0xC4, 0, 0, b"", 1000)
+            if reader is not None:
+                reader.close()
+            self.dev.out(0xC3, 0, 0, b"", 1000)             # the stream stopped
+            self.dev.release()
+        if reader.sink_error is not None:
+            raise reader.sink_error
+        if reader.failed:
+            raise BoardError("Reading from the board failed after %d bytes (%s)." % (reader.bytes, reader.failure))
+        s = self.status()
+        link = self.link_errors() if s["speed"] == 3 else None
+        r = self._need()
+        data = b"".join(parts)
+        del parts
+        if len(data) % 4:
+            data = data[:len(data) - len(data) % 4]
+        count = len(data) // 4
+        early = why in ("stopped", "size")
+
+        problems = []
+        if not reader.ended:
+            problems.append("the end of the data did not arrive")
+        if why == "time":
+            problems.append("the FPGA did not finish in the time the capture should take")
+        if count != r["words"]:
+            problems.append("%d words arrived, the FPGA sent %d" % (count, r["words"]))
+        if s["pib_errors"]:
+            code = s["pib_first"] & 0x3F
+            problems.append("%d errors at the FX3's parallel port: the first, %s"
+                            % (s["pib_errors"], PORT_ERRORS.get(code, "code %d" % code)))
+        if r["gave_up"]:
+            problems.append("the FPGA threw away data that the FX3 did not take")
+        # How many frames the words hold: all that were taken, unless the capture overflowed.  The stream is the
+        # standard design's with a frame for a sample, so words.py counts and checks it
+        held, taken = W.samples_held(data, fmt), r["samples"]
+        if fmt == "raw" and held == taken + 1:
+            held -= 1                       # an odd number of frames: the last word repeats the last one
+        if r["overflow"] or s["pib_errors"]:
+            if held > taken:
+                problems.append("the words hold %d frames, more than the %d taken" % (held, taken))
+        elif held != taken or (frames and not early and taken != frames):
+            problems.append("%s frames asked for, %d taken, %d arrived" % (frames or "no number of", taken, held))
+        if test is not None and not problems:
+            wrong = W.check_pattern(data, fmt, test, held)
+            if wrong:
+                problems.append(wrong.replace("word", "word (of frames)", 1))
+        # the samples.  A capture that ran to its end has as many as were asked for: of its last frame, those
+        # beyond that number are left out
+        whole = bool(frames) and held == frames
+        values, lengths = F.sample_runs(*W.runs_of(data, fmt, held), mode, samples if whole else held * mode.per)
+        info = {"time": started, "format": fmt, "test": test, "words": count, "read_seconds": round(t1 - t0, 3),
+                "usb": LINK.get(s["speed"], "?"), "fifo_max": r["fifo_max"], "fifo_size": 1 << r["fifo_bits"],
+                "samples_asked": samples, "link_errors": link, "fast": mode.name, "inputs": mode.channels,
+                "source": "Logic Boole 16 · fast design · %s" % ("test pattern" if test is not None
+                                                                   else "inputs %s" % mode.name)}
+        return Capture(rate, values, lengths,
+                       thresholds=(round(volts(r["duty_a"]), 3), round(volts(r["duty_b"]), 3)),
+                       overflow=bool(r["overflow"]), stopped=why if early else None, problems=problems, info=info)

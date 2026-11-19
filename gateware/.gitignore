@@ -1,5 +1,6 @@
-# What build.sh writes (build/) and what sim.sh writes (sim/build/)
+# What build.sh writes (build/, build-fast/) and what sim.sh and sim_fast.sh write (sim/build/)
 build/
+build-fast/
 # Simulator outputs
 *.vvp
 *.vcd

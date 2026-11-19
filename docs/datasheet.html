@@ -11,7 +11,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Logic Boole 16 (board revision C) preliminary datasheet, rev C</title>
+<title>Logic Boole 16 (board revision C) preliminary datasheet, rev D</title>
 <meta name="author" content="Michael Walker">
 <link rel="stylesheet" href="datasheet/fonts/fonts.css">
 <style>
@@ -30,7 +30,7 @@
   margin: 18mm 15mm 16mm 15mm;
   background: #ffffff;
   @top-left { content: "LOGIC BOOLE 16  ·  preliminary datasheet"; font: 700 7.2pt "Courier Prime", "Courier New", monospace; color: #46553a; vertical-align: bottom; padding-bottom: 2.5mm; }
-  @top-right { content: "Rev C  ·  2026-11-18  ·  board revision C"; font: 400 7.2pt "Courier Prime", "Courier New", monospace; color: #4a4d40; vertical-align: bottom; padding-bottom: 2.5mm; }
+  @top-right { content: "Rev D  ·  2026-11-19  ·  board revision C"; font: 400 7.2pt "Courier Prime", "Courier New", monospace; color: #4a4d40; vertical-align: bottom; padding-bottom: 2.5mm; }
   @bottom-left { content: "© 2026 Michael Walker. Open hardware, CERN-OHL-S v2. Preliminary: subject to change."; font: 400 7pt "Archivo", Arial, sans-serif; color: #4a4d40; vertical-align: top; padding-top: 3mm; }
   @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 700 7.2pt "Courier Prime", "Courier New", monospace; color: #46553a; vertical-align: top; padding-top: 3mm; }
 }
@@ -199,15 +199,15 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
       <svg viewBox="0 0 132.5 100" aria-hidden="true"><polyline points="6.25,93.75 24.25,93.75 24.25,6.25 64.25,6.25 64.25,93.75 86.25,93.75 86.25,6.25 108.25,6.25 108.25,93.75 126.25,93.75" fill="none" stroke="currentColor" stroke-width="12.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
       <span aria-hidden="true">Logic Boole 16</span>
     </div>
-    <p class="sub">Sixteen channels at 200&nbsp;MS/s over USB&nbsp;3, through 1&nbsp;MΩ inputs for 1.2 to 5&nbsp;V logic. It runs from one USB-C cable on a computer, or mounted on a Raspberry Pi 4 or 5 as a HAT+. Open source: the board, the FPGA design, the firmware and the software.</p>
+    <p class="sub">Sixteen channels at 200&nbsp;MS/s, or four at 750&nbsp;MS/s, over USB&nbsp;3, through 1&nbsp;MΩ inputs for 1.2 to 5&nbsp;V logic. It runs from one USB-C cable on a computer, or mounted on a Raspberry Pi 4 or 5 as a HAT+. Open source: the board, the FPGA design, the firmware and the software.</p>
   </div>
-  <div class="rev"><span class="flag">PRELIMINARY</span><br>Datasheet <b>rev C</b><br>2026-11-18<br>Board <b>revision C</b></div>
+  <div class="rev"><span class="flag">PRELIMINARY</span><br>Datasheet <b>rev D</b><br>2026-11-19<br>Board <b>revision C</b></div>
 </header>
 
 <div class="stats">
   <div class="stat"><div class="num">16<small>channels</small></div><div class="lab">Two pods of 8, each with its own threshold</div></div>
   <div class="stat"><div class="num">200<small>MS/s</small></div><div class="lab">On all 16 channels: one sample every 5 ns</div></div>
-  <div class="stat"><div class="num">85<small>MHz</small></div><div class="lab">Clocks captured whole, on each of the 16 inputs</div></div>
+  <div class="stat"><div class="num">750<small>MS/s</small></div><div class="lab">On 4 channels, 375&nbsp;MS/s on 8: one sample every 1.33&nbsp;ns</div></div>
   <div class="stat"><div class="num">Open<small>source</small></div><div class="lab">Board, FPGA design, firmware and software</div></div>
 </div>
 
@@ -217,7 +217,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
     <p>Logic Boole 16 is a 16-channel digital logic analyzer on one 82 × 86 mm board. Signals come in on two keyed pods, pass through sixteen identical protected inputs to an FPGA that samples and triggers on them, and leave over USB&nbsp;3 to the host: a computer, or the Raspberry Pi the board is mounted on. The host runs the software and holds the capture. The whole design is published under open licenses (section 12).</p>
     <h3>Features</h3>
     <ul class="features">
-      <li><b>16 channels at 200 MS/s</b>, in two pods of 8: a sample every 5&nbsp;ns.</li>
+      <li><b>16 channels at 200 MS/s</b>, in two pods of 8, or <b>8 at 375 and 4 at 750 MS/s</b> with the fast FPGA design: clocks up to 200&nbsp;MHz.</li>
       <li><b>Streams to the host over USB 3</b>: all 16 channels at 100&nbsp;MS/s for any signal, and at 200&nbsp;MS/s for signals that change in up to 96 million samples a second.</li>
       <li><b>Triggers in the FPGA</b>, on every sample: levels, edges, pulses by their length and up to four stages in turn, with trigger in and out for other instruments.</li>
       <li><b>A glitch filter for each channel</b>, up to 1.25&nbsp;µs, and capture on the circuit's own clock up to 50&nbsp;MHz.</li>
@@ -257,13 +257,13 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
       <li><a href="#s5"><span class="n">5</span>Connections<span class="pg">6</span></a></li>
       <li><a href="#s6"><span class="n">6</span>Capture and triggers<span class="pg">8</span></a></li>
       <li><a href="#s7"><span class="n">7</span>Getting started<span class="pg">9</span></a></li>
-      <li><a href="#s8"><span class="n">8</span>Typical applications<span class="pg">11</span></a></li>
-      <li><a href="#s9"><span class="n">9</span>Probing and safety<span class="pg">12</span></a></li>
-      <li><a href="#s10"><span class="n">10</span>Dimensions<span class="pg">13</span></a></li>
-      <li><a href="#s11"><span class="n">11</span>Firmware and software<span class="pg">14</span></a></li>
-      <li><a href="#s12"><span class="n">12</span>Open source<span class="pg">15</span></a></li>
-      <li><a href="#s13"><span class="n">13</span>Status and known limits<span class="pg">16</span></a></li>
-      <li><a href="#s14"><span class="n">14</span>Revisions and documents<span class="pg">17</span></a></li>
+      <li><a href="#s8"><span class="n">8</span>Typical applications<span class="pg">12</span></a></li>
+      <li><a href="#s9"><span class="n">9</span>Probing and safety<span class="pg">13</span></a></li>
+      <li><a href="#s10"><span class="n">10</span>Dimensions<span class="pg">14</span></a></li>
+      <li><a href="#s11"><span class="n">11</span>Firmware and software<span class="pg">15</span></a></li>
+      <li><a href="#s12"><span class="n">12</span>Open source<span class="pg">16</span></a></li>
+      <li><a href="#s13"><span class="n">13</span>Status and known limits<span class="pg">17</span></a></li>
+      <li><a href="#s14"><span class="n">14</span>Revisions and documents<span class="pg">18</span></a></li>
     </ol>
   </div>
 </div>
@@ -279,15 +279,20 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
   <tbody>
     <tr><td class="p">Channels</td><td class="v"></td><td class="v">16</td><td class="v"></td><td class="v"></td><td>Digital. Two pods of 8: A0–A7 and B0–B7</td></tr>
     <tr><td class="p">Sample rate</td><td class="v"></td><td class="v"></td><td class="v">200</td><td class="v">MS/s</td><td>On all 16 channels: 5 ns between samples, 4.95 to 5.05 ns measured. Lower rates are 200 MS/s divided by a whole number</td></tr>
+    <tr><td class="p">Sample rate, 8 channels</td><td class="v"></td><td class="v"></td><td class="v">375</td><td class="v">MS/s</td><td>Pod A or pod B, with the fast FPGA design (section 6): 2.67 ns between samples, 2.66 to 2.67 ns measured</td></tr>
+    <tr><td class="p">Sample rate, 4 channels</td><td class="v"></td><td class="v"></td><td class="v">750</td><td class="v">MS/s</td><td>A0–A3, A4–A7, B0–B3 or B4–B7, with the fast FPGA design: 1.33 ns between samples, 1.329 to 1.337 ns measured</td></tr>
     <tr><td class="p">Streaming over USB 3, any signal</td><td class="v"></td><td class="v"></td><td class="v">100</td><td class="v">MS/s</td><td>All 16 channels in the raw format: two samples in each 32-bit word, 200 MB/s</td></tr>
+    <tr><td class="p">Streaming, fast FPGA design</td><td class="v"></td><td class="v"></td><td class="v">750</td><td class="v">MS/s</td><td>Any signal, in the raw format: 4 channels at 750 MS/s, 8 at 375 or 16 at 187.5, each 375 MB/s</td></tr>
     <tr><td class="p">Streaming over USB 3, run-length</td><td class="v"></td><td class="v"></td><td class="v">200</td><td class="v">MS/s</td><td>All 16 channels, for signals that change in up to 96 million samples a second: one word for each sample that differs from the one before. A 48 MHz clock streamed whole for 1 s</td></tr>
     <tr><td class="p">Any signal at 200 MS/s</td><td class="v"></td><td class="v">0.89&nbsp;M</td><td class="v"></td><td class="v">samples</td><td>A signal that changes in 100 million samples a second or more fills the board's buffers. The capture ends there, after 4.5 ms, whole to its last sample</td></tr>
     <tr><td class="p">Streaming over USB 2.0</td><td class="v"></td><td class="v"></td><td class="v">22</td><td class="v">MS/s</td><td>All 16 channels in the raw format, any signal: 44 MB/s. Run-length at 200 MS/s for signals that change in up to 11 million samples a second</td></tr>
     <tr><td class="p">Kept from before the trigger</td><td class="v"></td><td class="v"></td><td class="v">8184</td><td class="v">words</td><td>16,368 samples in the raw format. In the run-length format 8184 changes, however long they took</td></tr>
     <tr><td class="p">Capture length</td><td class="v"></td><td class="v"></td><td class="v"></td><td class="v"></td><td>Limited by the host's memory. The longest so far is 600 million samples</td></tr>
-    <tr><td class="p">Input signal frequency</td><td class="v"></td><td class="v">85</td><td class="v"></td><td class="v">MHz</td><td>Every period of a clock was seen at 50, 70, 80 and 85 MHz on each of the 16 inputs of one board, and on the five inputs tried of a second</td></tr>
-    <tr><td class="p">Input pulse length</td><td class="v">6</td><td class="v"></td><td class="v"></td><td class="v">ns</td><td>A half period at 85 MHz is 5.9 ns. A pulse shorter than the 5 ns between samples can be missed</td></tr>
-    <tr><td class="p">Pulse length error</td><td class="v"></td><td class="v">±0.6</td><td class="v"></td><td class="v">ns</td><td>At 85 MHz pod A reads a clock high for 51 to 53 % of the time and pod B for 45 to 48 %: the first boards have a different comparator on each pod (section 14)</td></tr>
+    <tr><td class="p">Input signal frequency, 750 MS/s</td><td class="v"></td><td class="v">200</td><td class="v"></td><td class="v">MHz</td><td>Every period of a clock at 100, 150, 180 and 199.9 MHz on each of the 16 inputs of one board, four at a time, with 3.3 V logic and the threshold at 1.56 V</td></tr>
+    <tr><td class="p">Input signal frequency, 200 MS/s</td><td class="v"></td><td class="v">85</td><td class="v"></td><td class="v">MHz</td><td>Every period of a clock was seen at 50, 70, 80 and 85 MHz on each of the 16 inputs of one board, and on the five inputs tried of a second</td></tr>
+    <tr><td class="p">Input pulse length</td><td class="v">6</td><td class="v"></td><td class="v"></td><td class="v">ns</td><td>At 200 MS/s. A half period at 85 MHz is 5.9 ns. A pulse shorter than the 5 ns between samples can be missed</td></tr>
+    <tr><td class="p">Input pulse length, 750 MS/s</td><td class="v">2.5</td><td class="v"></td><td class="v"></td><td class="v">ns</td><td>A half period at 200 MHz. A pulse shorter than the 1.33 ns between samples can be missed</td></tr>
+    <tr><td class="p">Pulse length error</td><td class="v"></td><td class="v">±0.6</td><td class="v"></td><td class="v">ns</td><td>At 85 MHz pod A reads a clock high for 51 to 53 % of the time and pod B for 45 to 48 %: the first boards have a different comparator on each pod (section 14). At 200 MHz, 57 to 62 % and 52 to 54 %</td></tr>
     <tr><td class="p">Capture clock</td><td class="v"></td><td class="v"></td><td class="v">50</td><td class="v">MHz</td><td>The circuit's own clock on any input: a sample at its rising edges, its falling edges or both. The data must be steady 15 ns before the edge</td></tr>
     <tr><td class="p">Trigger output delay</td><td class="v"></td><td class="v">75–80</td><td class="v"></td><td class="v">ns</td><td>From the trigger sample at the inputs to TRIG OUT. A glitch filter adds its own time and 20 ns</td></tr>
     <tr><td class="p">Trigger input delay</td><td class="v"></td><td class="v"></td><td class="v">5</td><td class="v">ns</td><td>The trigger sample is the sample in which an input shows the same edge, or the one after it. Tried from 100 kHz to 50 MHz</td></tr>
@@ -308,7 +313,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
     <tr><td class="p">Hysteresis</td><td class="v">25</td><td class="v">60–80</td><td class="v">100</td><td class="v">mV</td><td>At every threshold setting</td></tr>
     <tr><td class="p">Input resistance</td><td class="v">1.0</td><td class="v">1.08</td><td class="v"></td><td class="v">MΩ</td><td>To ground: the divider's two resistors</td></tr>
     <tr><td class="p">Input capacitance</td><td class="v"></td><td class="v">8.6</td><td class="v">10</td><td class="v">pF</td><td>To ground</td></tr>
-    <tr><td class="p">Channel-to-channel skew</td><td class="v"></td><td class="v">1.4</td><td class="v">5</td><td class="v">ns</td><td>Between the earliest and the latest of the 16 inputs of one board. Pod B is 0.2 to 0.6 ns ahead of pod A. The 5 ns is one sample</td></tr>
+    <tr><td class="p">Channel-to-channel skew</td><td class="v"></td><td class="v">1.4</td><td class="v">5</td><td class="v">ns</td><td>Between the earliest and the latest of the 16 inputs of one board. Pod B is 0.2 to 0.6 ns ahead of pod A. The 5 ns is one sample at 200 MS/s</td></tr>
     <tr><td class="p">Input voltage, continuous</td><td class="v">−25</td><td class="v"></td><td class="v">+25</td><td class="v">V</td><td>On any channel, with the board powered or not</td></tr>
   </tbody>
 </table>
@@ -718,6 +723,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
     <tr><td class="p">Raw, USB 3</td><td>16 channels at up to 100 MS/s</td><td>For any signal, however busy the lines are: two samples in each 32-bit word, 200 MB/s at 100 MS/s</td></tr>
     <tr><td class="p">Run-length, USB 3</td><td>16 channels at 200 MS/s</td><td>For signals that change in up to 96 million samples a second: I²C, SPI, UART and most buses, and a clock up to 48 MHz. Lossless</td></tr>
     <tr><td class="p">Any signal at 200 MS/s</td><td>892,928 samples, 4.5 ms</td><td>Signals that change in every sample are more than the link carries. The capture ends when the board's buffers are full</td></tr>
+    <tr><td class="p">Fast design, USB 3</td><td>4 channels at 750 MS/s, 8 at 375, 16 at 187.5</td><td>For any signal, in the raw format: 375 MB/s in each mode. Run-length too, for long captures of quiet signals</td></tr>
     <tr><td class="p">USB 2.0</td><td>16 channels at up to 22 MS/s raw</td><td>On a USB 2.0 port or cable: 44 MB/s. Run-length at 200 MS/s for signals that change in up to 11 million samples a second</td></tr>
   </tbody>
 </table>
@@ -786,6 +792,18 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
     </div>
   </div>
 </div>
+<div class="keep">
+<h3>Fewer channels, faster: the fast FPGA design</h3>
+<p>The host can load a second FPGA design in place of the first. It takes every input 750 million times a second, through a deserializer in each input pin, and keeps 16 bits of samples in each 5.33&nbsp;ns. It takes samples and sends them, and nothing more: no trigger, glitch filter, capture clock or Pi lines. A capture starts when it is asked for and runs for a set time or number of samples, or until it is stopped. The thresholds are set as before. The software loads the fast design when a capture asks for it, and the standard design again for the next capture that does not.</p>
+<table>
+  <thead><tr><th style="width:36%">Channels</th><th class="v" style="width:16%">Sample rate</th><th class="v" style="width:18%">Between samples</th><th>For</th></tr></thead>
+  <tbody>
+    <tr><td class="p">4: A0–A3, A4–A7, B0–B3 or B4–B7</td><td class="v">750 MS/s</td><td class="v">1.33 ns</td><td>Clocks up to 200 MHz, and timing to 1.33 ns</td></tr>
+    <tr><td class="p">8: pod A or pod B</td><td class="v">375 MS/s</td><td class="v">2.67 ns</td><td>A bus of eight lines, up to about 140 MHz</td></tr>
+    <tr><td class="p">All 16</td><td class="v">187.5 MS/s</td><td class="v">5.33 ns</td><td>Busy signals on all 16, streamed with no limit on length</td></tr>
+  </tbody>
+</table>
+</div>
 </section>
 
 <!-- ============================== 7 GETTING STARTED ============================== -->
@@ -802,6 +820,14 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
   <li><b>Connect ground first</b>: a lead from an even pin of each pod you use to the ground of the circuit under test. Then connect the signals to the odd pins.</li>
   <li><b>Set each pod's threshold</b> to half the logic level of the signals on it (section 6).</li>
   <li><b>Choose a sample rate and a trigger, and start the capture.</b> ARM is on while the analyzer waits for its trigger, and TRIG when it has fired.</li>
+</ol>
+
+<h3>Fast signals, at 750&nbsp;MS/s</h3>
+<ol>
+  <li><b>Put the signals on one group of four</b>: A0–A3, A4–A7, B0–B3 or B4–B7. Signals whose timing you compare to the nanosecond belong on one pod (section 13).</li>
+  <li><b>Keep the leads short</b> above about 25&nbsp;MHz, 10&nbsp;cm or less, with a ground lead from the pod's even pins beside the signals. Long leads ring, and a long shared ground lets one signal's edges disturb another's.</li>
+  <li><b>Set the pod's threshold to half the logic level.</b> At 200&nbsp;MHz the inputs see a rounded clock, and a threshold far from the middle loses periods.</li>
+  <li><b>Run <code>./logicboole capture fast.sr --fast A0-A3 --time 10ms</code></b> and open <code>fast.sr</code> in PulseView. <code>--fast A</code> or <code>--fast B</code> takes a whole pod at 375&nbsp;MS/s. The fast design has no trigger: the capture starts at once.</li>
 </ol>
 
 <h3 style="break-before:page;margin-top:0">On a Raspberry Pi</h3>
@@ -1232,9 +1258,10 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
       <li><b>Files</b>: <code>.sr</code> for PulseView and sigrok-cli, <code>.vcd</code>, <code>.csv</code>, and its own <code>.lb16</code>.</li>
       <li><b>Decoders</b>: sigrok's, more than a hundred, through <code>sigrok-cli</code> if it is installed.</li>
       <li><b>For AI agents</b>: <code>./logicboole mcp</code>, a Model Context Protocol server, and a skill file.</li>
+      <li><b>The fast design</b>: <code>capture --fast</code>, from the command line, in Python and through the MCP server. The app does not offer it yet.</li>
       <li><b>With no board</b>: <code>--fake</code> runs all of it on a stand-in.</li>
     </ul>
-    <p><code>./logicboole selftest</code> checks the whole path from the FPGA to the host: 34 captures of a test pattern, with every word compared.</p>
+    <p><code>./logicboole selftest</code> checks the whole path from the FPGA to the host: 34 captures of a test pattern, with every word compared. <code>selftest --fast</code> does the same with the fast design.</p>
   </div>
 </div>
 <h3>Programming and debug pads</h3>
@@ -1296,7 +1323,8 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
     <tr><td class="p">Supplies and start-up</td><td>Boards 1 and 2</td><td>Every rail right. The firmware and the FPGA load over USB, and the two boards give different serial numbers</td></tr>
     <tr><td class="p">The path to the host</td><td>Boards 1 and 2</td><td>The self-test passes over USB 3 and over USB 2.0: 34 captures of a test pattern with every word compared, 600 million samples at 200 MS/s among them</td></tr>
     <tr><td class="p">Sampling</td><td>Board 1</td><td>Clocks of 1 MHz and 100 kHz at 200 MS/s: every half period of the 1 MHz clock is 99 to 101 samples, and the two samples of a cycle are 4.95 to 5.05 ns apart</td></tr>
-    <tr><td class="p">Inputs at speed</td><td>Board 1: all 16. Board 2: 5</td><td>A clock on one input at a time at 50, 70, 80 and 85 MHz: every period seen, the other inputs quiet. At 90 MHz some inputs miss up to 2 % of the periods</td></tr>
+    <tr><td class="p">Inputs at speed</td><td>Board 1: all 16. Board 2: 5</td><td>A clock on one input at a time at 50, 70, 80 and 85 MHz: every period seen, the other inputs quiet. At 90 MHz some inputs miss up to 2 % of the periods. All at 200 MS/s</td></tr>
+    <tr><td class="p">The fast design</td><td>Board 1: all 16</td><td>4 channels at 750 MS/s: clocks of 1 to 199.9 MHz on each of the 16 inputs, every period seen; the samples 1.329 to 1.337 ns apart. 8 channels at 375 MS/s: every period up to 140 MHz on B0. Its self-test: 25 captures, every word compared, raw at 375 MB/s among them</td></tr>
     <tr><td class="p">Thresholds</td><td>Board 1</td><td>The threshold voltage is within 10 mV of its setting, seen from the probe, at 0.30, 1.56 and 3.00 V. All 16 inputs read a 3.3 V pattern right from 0.2 to 3.0 V</td></tr>
     <tr><td class="p">Skew and 5 V logic</td><td>Board 1</td><td>1.4 ns between the earliest and the latest of the 16 inputs. 5 V logic reads right on four inputs of pod A beside 3.3 V logic on four more</td></tr>
     <tr><td class="p">Trigger, glitch filter, capture clock</td><td>Board 1, three or four inputs</td><td>In 50 captures the trigger sample was the one a model picked, sample by sample. The capture clock at 10, 25 and 50 MHz gave one sample for each edge. The filter is as in section 2</td></tr>
@@ -1314,7 +1342,9 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
     <tr><td class="p">Digital only</td><td>No analog channels and no pattern generator</td><td>Use the trigger output to start a scope</td></tr>
     <tr><td class="p">200 MS/s needs idle time to stream</td><td>A signal that changes in 100 million samples a second or more overflows: the capture ends after 4.5 ms, whole up to there</td><td>Use the raw format at 100 MS/s, or take the 4.5 ms</td></tr>
     <tr><td class="p">USB 2.0 carries a ninth as much</td><td>Captures that make more than 11 million words a second overflow</td><td>Use a USB 3 cable and port</td></tr>
-    <tr><td class="p">Signals above 85 MHz</td><td>At 90 MHz some inputs miss pulses</td><td>Keep to 85 MHz, or 6 ns pulses</td></tr>
+    <tr><td class="p">Signals above 85 MHz at 200 MS/s</td><td>At 90 MHz some inputs miss pulses</td><td>Keep to 85 MHz, or take 4 channels at 750 MS/s: clocks up to 200 MHz</td></tr>
+    <tr><td class="p">The fast design has no trigger</td><td>No trigger, glitch filter, capture clock or Pi lines. The app does not offer it yet</td><td>The command line, Python or the MCP server. For a trigger, the standard design</td></tr>
+    <tr><td class="p">At 200 MHz, the threshold</td><td>The inputs see a rounded clock: with 3.3 V logic every period was seen at thresholds from 1.4 to 1.9 V, not at 1.2 or 2.1 V</td><td>Set the threshold to half the logic level</td></tr>
     <tr><td class="p">Two comparator types on the first boards</td><td>At 85 MHz pod A reads a high up to 0.4 ns long and pod B up to 0.6 ns short. Pod B's edges come 0.2 to 0.6 ns before pod A's</td><td>Put signals whose timing you compare on one pod</td></tr>
     <tr><td class="p">Capture clock: data set-up</td><td>Data that changes about 5 ns before the clock's edge is read old in some samples and new in others</td><td>Have the data steady 15 ns before the edge</td></tr>
     <tr><td class="p">Thresholds stop at 3 V</td><td>No threshold near the top of a 5 V swing</td><td>Use 2.5 V for 5 V CMOS, or 1.4 V for TTL levels (section 6)</td></tr>
@@ -1414,6 +1444,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
         <tr><td class="p">A</td><td>2026-11-13</td><td>First issue, for board revision C. Preliminary</td></tr>
         <tr><td class="p">B</td><td>2026-11-17</td><td>Figures measured on the first boards in place of design figures. Capture, triggers, glitch filter and capture clock as built: revision A's burst buffer is not built and is gone; capture of the Pi's bus lines is in the FPGA design, in place of pod channels. The software, and the open-source release (section 12)</td></tr>
         <tr><td class="p">C</td><td>2026-11-18</td><td>Only the board is in the box: a USB cable, and spacers and screws for a Raspberry Pi, are the customer's to get (sections 1 and 7). A new look, in the typefaces and colors of the shop pages</td></tr>
+        <tr><td class="p">D</td><td>2026-11-19</td><td>The fast FPGA design: 4 channels at 750 MS/s, 8 at 375 MS/s and 16 at 187.5 MS/s, measured on board 1 (sections 1, 2, 6, 11 and 13)</td></tr>
       </tbody>
     </table>
   </div>

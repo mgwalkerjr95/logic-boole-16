@@ -217,10 +217,12 @@ class Capture:
     def _vcd(self, path, names):
         # Times are counted in the largest unit a VCD file may name (1, 10 or 100 of a unit) that the sample
         # period is a whole number of: 1 ns at 200 MS/s, 10 ns at 100 MS/s and at 50 MS/s, 1 us at 1 MS/s.
-        step, exponent = round(1e12 / self.rate), 0             # picoseconds; the board's periods are whole 5 ns
-        while step % 10 == 0 and exponent < 12:
+        # The standard design's periods are whole 5 ns.  The fast design's are not whole in any unit (1.333 ns at
+        # 750 MS/s): those are counted in femtoseconds, which is right to 3 parts in 10 million.
+        step, exponent = round(1e15 / self.rate), 0             # femtoseconds
+        while step % 10 == 0 and exponent < 15:
             step, exponent = step // 10, exponent + 1
-        scale = "%d %s" % (10 ** (exponent % 3), ("ps", "ns", "us", "ms", "s")[exponent // 3])
+        scale = "%d %s" % (10 ** (exponent % 3), ("fs", "ps", "ns", "us", "ms", "s")[exponent // 3])
         ids = [chr(33 + i) for i in range(16)]
         with open(path, "w") as f:
             f.write("$version Logic Boole 16 $end\n$timescale %s $end\n$scope module logic $end\n" % scale)

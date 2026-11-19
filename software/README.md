@@ -129,7 +129,7 @@ takes 2 seconds at 10 MS/s with pod A's threshold at 1.65 V and pod B's at 0.9 V
 | `logicboole capture FILE ...` | One capture, written to each file named |
 | `logicboole threshold A [B]` | Sets the thresholds, in volts |
 | `logicboole inputs` | The 16 inputs as they are now |
-| `logicboole selftest` | Captures the FPGA's test pattern in both formats from 1 MS/s to 200 MS/s, with and without a trigger, and compares every word |
+| `logicboole selftest` | Captures the FPGA's test pattern in both formats from 1 MS/s to 200 MS/s, with and without a trigger, and compares every word. `selftest --fast` does it with the fast design |
 | `logicboole show FILE.lb16` | What a saved capture holds |
 | `logicboole measure FILE.lb16 [CHANNEL ...]` | Periods, frequencies and pulse lengths read off a saved capture |
 | `logicboole decode FILE DECODER ...` | What a protocol decoder finds in a saved capture: sigrok's decoders, through `sigrok-cli` |
@@ -157,6 +157,7 @@ takes 2 seconds at 10 MS/s with pod A's threshold at 1.65 V and pod B's at 0.9 V
 | `--clock INPUT=EDGE` | A sample at each edge of one input, the circuit's own clock, in place of the sample rate. See below |
 | `--glitch TIME` | A glitch filter: `20ns` for every input, or `A0=20ns,B=1us` for a channel and a pod |
 | `--pi LINES` | Lines of the Raspberry Pi the board sits on, in place of probes: `i2c`, `uart`, `spi`, `all`, or single lines. See below |
+| `--fast INPUTS` | The fast design: four inputs at 750 MS/s (`A0-A3`, `A4-A7`, `B0-B3`, `B4-B7`), a pod at 375 MS/s (`A`, `B`) or all 16 at 187.5 MS/s (`all`). See below |
 | `--json` | The result as JSON |
 
 Ctrl-C ends a capture early and keeps what it has.
@@ -229,6 +230,21 @@ channel after the line, SDA, SCL, TXD and so on, and `decode` takes those names:
 
 This is in the FPGA's design from version 5 on. It has passed the design's simulation and the software's tests
 with the stand-in board; **it has not yet run on a board.**
+
+**The fast design** (`--fast`). The FPGA can be loaded with a second design that takes fewer inputs more often:
+four inputs every 1.33 ns, a pod every 2.67 ns, or all 16 every 5.33 ns. It takes samples and sends them and has
+nothing else, so `--fast` goes with `-t`, `-n`, `-a`, `-b`, `--raw` and `--test` only, and 10 ms is its default
+length. The first capture with `--fast` loads the design, and the next capture without it loads the standard
+design again; the thresholds stay as they were. The inputs that are not taken read low in the capture.
+
+    ./logicboole capture --fast A0-A3 -t 10ms fast.lb16     # A0 to A3, 750 MS/s
+    ./logicboole capture --fast B -t 50ms pod-b.sr          # pod B, 375 MS/s
+
+In Python it is `board.capture_fast("A0-A3", seconds=0.01)`, and the agent's server takes it as `capture` with
+`fast`. The app does not offer it yet.
+The design's bitstream is `logicboole/data/gateware-fast.bin`; [`../gateware/README.md`](../gateware/README.md)
+describes the design and its build. It has passed its self-test and captured clocks up to 85 MHz on one
+board; the gateware README has what was measured.
 
 **How much the board carries.** The board sends a word for every change of the inputs, or with `--raw` a word
 for every two samples, and a little under 100 million words a second can leave it. On one board, a 48 MHz
@@ -413,11 +429,11 @@ command. For Claude Code: `claude mcp add logicboole -- logicboole mcp`.
 | `board_info` | What is on USB and the board's settings, with nothing changed |
 | `set_thresholds` | The two pods' thresholds |
 | `read_inputs` | The 16 inputs as they are now |
-| `capture` | One capture, with a trigger, a capture clock or a glitch filter if wanted, saved to a file |
+| `capture` | One capture, with a trigger, a capture clock or a glitch filter if wanted, saved to a file. With `fast`, the fast design: 4 inputs at 750 MS/s, a pod at 375 MS/s or all 16 at 187.5 MS/s |
 | `measure` | Periods, frequencies, pulse lengths and changes read off a saved capture |
 | `decode` | What a protocol decoder finds in a saved capture (needs `sigrok-cli`) |
 | `list_decoders` | The decoders there are, or what one of them takes |
-| `self_test` | The path from the FPGA to the computer, checked with the FPGA's test pattern |
+| `self_test` | The path from the FPGA to the computer, checked with the FPGA's test pattern. With `fast`, the fast design's |
 
 `capture` saves an `.lb16` file and answers with its name and a summary; `measure` and `decode` are given that
 name. The files go into a folder for temporary files, or into the one named with `logicboole mcp --dir FOLDER`,
@@ -453,6 +469,7 @@ shorter than asked for and whole up to its last sample: there are no gaps inside
 | `logicboole/usb.py` | libusb through ctypes: vendor requests and the queued reads of the bulk endpoint |
 | `logicboole/board.py` | Loading the board, its registers and thresholds, and the steps of a capture |
 | `logicboole/words.py` | The two formats of the stream, and the test pattern |
+| `logicboole/fast.py` | The fast design: its choices of inputs, and its frames as samples |
 | `logicboole/trigger.py` | The trigger, the capture clock, the glitch filter and the Pi's lines: their text, and the FPGA's registers |
 | `logicboole/capture.py` | A finished capture, the file formats, and the measuring |
 | `logicboole/decode.py` | sigrok's decoders on a saved capture: what `sigrok-cli` is asked, and what it answers |
@@ -463,7 +480,7 @@ shorter than asked for and whole up to its last sample: there are no gaps inside
 | `logicboole/web/` | The app's pages: `app.js` (the screen), `capture.js` (a capture as lists of edges), `decoders.js` (I²C, SPI, serial), `sigrok.js` (sigrok's decoders: what is asked and how the answer is laid out), `detect.js` (auto-detect), `demo.js` (simulated signals) |
 | `logicboole/fake.py` | The stand-in board |
 | `logicboole/selftest.py` | The captures of `logicboole selftest` |
-| `logicboole/data/` | The FPGA bitstream that is loaded into the board, and the place for a firmware image of your own build |
+| `logicboole/data/` | The FPGA bitstreams that are loaded into the board (`gateware.bin`, and `gateware-fast.bin` for the fast design), and the place for a firmware image of your own build |
 
 [`../docs/protocol.md`](../docs/protocol.md) describes the USB requests, the FPGA's registers and the stream.
 The firmware's source is in [`../firmware`](../firmware) and the FPGA's in [`../gateware`](../gateware); each
@@ -483,5 +500,5 @@ any later version. It is distributed in the hope that it will be useful, but WIT
 the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See [LICENSE](LICENSE) for the GNU
 General Public License.
 
-The two files in `logicboole/data/` that are loaded into the board come under the terms of what they are built
+The files in `logicboole/data/` that are loaded into the board come under the terms of what they are built
 from: see [logicboole/data/NOTICE.md](logicboole/data/NOTICE.md).

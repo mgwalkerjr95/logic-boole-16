@@ -9,9 +9,11 @@
     logicboole info                     what is on USB, and the board's settings
     logicboole capture FILE ...         one capture, written to each FILE (.sr .vcd .csv .lb16)
     logicboole capture --trigger "B0=r" FILE ...    the same, waiting for B0 to rise ("capture -h" lists it all)
+    logicboole capture --fast A0-A3 -t 10ms FILE    four inputs at 750 MS/s (or a pod, "--fast A", at 375 MS/s)
     logicboole threshold A [B]          sets the thresholds, in volts
     logicboole inputs                   the 16 inputs as they are now
     logicboole selftest                 checks the path from the FPGA to the computer with its test pattern
+                                        (selftest --fast: with the fast design)
     logicboole show FILE.lb16           what a saved capture holds
     logicboole measure FILE.lb16 A0 ...  periods, frequencies and pulse lengths read off a saved capture
     logicboole decode FILE i2c scl=A1 sda=A0     what a protocol decoder finds in a saved capture (sigrok's
@@ -33,7 +35,7 @@ import sys
 
 from . import __version__, board as B, decode as D, trigger as T, usb
 from .capture import CHANNELS, Capture
-from .selftest import selftest
+from .selftest import selftest, selftest_fast
 
 
 def number(text):
@@ -139,9 +141,10 @@ def parser():
 
     c = command("capture", "one capture, written to each FILE (.sr .vcd .csv .lb16)")
     c.add_argument("files", nargs="*", metavar="FILE")
-    c.add_argument("-r", "--rate", type=number, default=1e6, help="samples a second: 200M, 100M, 50M, 10M, 1M (the "
+    c.add_argument("-r", "--rate", type=number, help="samples a second: 200M, 100M, 50M, 10M, 1M (the "
                    "default), 250k ...; the board takes the nearest of 200 MS/s / 1, / 2, / 3 ...")
-    c.add_argument("-t", "--time", type=duration, default=1.0, help="how long: 2, 0.5, 20ms (1 s is the default)")
+    c.add_argument("-t", "--time", type=duration, help="how long: 2, 0.5, 20ms (1 s is the default; with --fast, "
+                                                       "10 ms)")
     c.add_argument("-n", "--samples", type=number, help="how many samples, in place of --time; 0: until Ctrl-C")
     c.add_argument("-a", type=float, metavar="VOLTS", help="pod A's threshold")
     c.add_argument("-b", type=float, metavar="VOLTS", help="pod B's threshold")
@@ -171,6 +174,10 @@ def parser():
                    "\"i2c\" (SDA for A0, SCL for A1), \"uart\" (TXD for A2, RXD for A3), \"spi\" (MOSI, MISO, "
                    "SCLK, CE0 for A4 ... A7, CE1 for B0), \"all\", or single lines such as \"scl,gpio14\".  The "
                    "line's solder jumper on the board has to be closed")
+    c.add_argument("--fast", metavar="INPUTS", help="the fast design: four inputs at 750 MS/s (A0-A3, A4-A7, B0-B3 "
+                   "or B4-B7), a pod at 375 MS/s (A or B) or all 16 at 187.5 MS/s (all).  The FPGA is loaded with "
+                   "it first, and with the standard design again by the next capture without --fast.  Goes with "
+                   "-t, -n, -a, -b, --raw and --test only")
     c.add_argument("--json", action="store_true")
 
     c = command("threshold", "sets the thresholds, in volts at the probe")
@@ -181,7 +188,8 @@ def parser():
     c = command("inputs", "the 16 inputs as they are now")
     c.add_argument("--json", action="store_true")
 
-    command("selftest", "checks the path from the FPGA to the computer with the FPGA's test pattern")
+    c = command("selftest", "checks the path from the FPGA to the computer with the FPGA's test pattern")
+    c.add_argument("--fast", action="store_true", help="check the fast design instead (it is loaded first)")
     command("check", "the first thing to run: checks this computer and the board, and says what is missing")
 
     c = command("show", "what a saved capture holds")
@@ -382,7 +390,7 @@ def run(args):
             v = board.inputs()
             print(json.dumps({c: v >> i & 1 for i, c in enumerate(CHANNELS)}) if args.json else levels(v))
         elif cmd == "selftest":
-            ok = selftest(board, scale=0.02 if args.fake else 1.0)
+            ok = (selftest_fast if args.fast else selftest)(board, scale=0.02 if args.fake else 1.0)
             print("The capture path passed." if ok else "The capture path did NOT pass.")
             return 0 if ok else 1
         elif cmd == "capture":
@@ -481,15 +489,30 @@ def capture(board, args):
         before = T.seconds(args.before)
         if before is None:
             samples_before = round(number(args.before))
+    samples = None if args.samples is None else round(args.samples)
+    if args.fast:                           # the fast design: it has the inputs, the length and the format only
+        given = [name for name, value in (("--rate", args.rate), ("--trigger", args.trigger),
+                                          ("--before", args.before), ("--timeout", args.timeout),
+                                          ("--clock", args.clock), ("--glitch", args.glitch), ("--pi", args.pi))
+                 if value is not None]
+        if given:
+            raise ValueError("--fast goes without %s: the fast design takes samples and sends them, and its rate "
+                             "is set by how many inputs it takes." % " and ".join(given))
     asked = []
     old = signal.signal(signal.SIGINT, lambda *_: asked.append(1))     # Ctrl-C ends the capture; what it has is kept
     try:
-        cap = board.capture(rate=args.rate, seconds=args.time,
-                            samples=None if args.samples is None else round(args.samples),
-                            fmt="raw" if args.raw else "rle", test=args.test, a=args.a, b=args.b,
-                            cancel=lambda: bool(asked), trigger=args.trigger, before=before,
-                            samples_before=samples_before, timeout=args.timeout, clock=args.clock,
-                            glitch=args.glitch, pi=args.pi)
+        if args.fast:
+            cap = board.capture_fast(args.fast, seconds=0.01 if args.time is None else args.time, samples=samples,
+                                     fmt="raw" if args.raw else "rle", test=args.test, a=args.a, b=args.b,
+                                     cancel=lambda: bool(asked),
+                                     log=lambda line: print(line, file=sys.stderr))
+        else:
+            cap = board.capture(rate=1e6 if args.rate is None else args.rate,
+                                seconds=1.0 if args.time is None else args.time, samples=samples,
+                                fmt="raw" if args.raw else "rle", test=args.test, a=args.a, b=args.b,
+                                cancel=lambda: bool(asked), trigger=args.trigger, before=before,
+                                samples_before=samples_before, timeout=args.timeout, clock=args.clock,
+                                glitch=args.glitch, pi=args.pi)
     finally:
         signal.signal(signal.SIGINT, old)
     for path in args.files:
@@ -502,6 +525,8 @@ def capture(board, args):
              else "%s for %.9g s" % (rate_text(cap.rate), cap.seconds),
              cap.samples, cap.info["words"], cap.info["words"] * 4 / 1e6, cap.info["usb"], cap.thresholds[0],
              cap.thresholds[1]))
+    if cap.info.get("fast"):
+        print("  the fast design: inputs %s; the other inputs read low" % " ".join(cap.info["inputs"]))
     if cap.info.get("glitch_ns"):
         print("  glitch filter: %s" % ", ".join("%s %d ns" % (c, ns) for c, ns in zip(CHANNELS, cap.info["glitch_ns"])
                                                 if ns))
@@ -520,7 +545,7 @@ def capture(board, args):
     if args.test is not None:
         if cap.ok:
             print("  every word is the test pattern's")
-    elif cap.samples <= 50e6 or cap.format == "rle":
+    elif cap.samples <= 50e6 or cap.format == "rle" or cap.info.get("fast"):
         print("\n".join(describe(cap)))
     else:
         print("  The channels are not listed: going through more than 50 million raw samples takes a while.  "

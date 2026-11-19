@@ -3,6 +3,8 @@
 
 """Checks the whole path from the FPGA to the computer, with nothing connected to the probes.
 
+selftest() is for the standard design and selftest_fast(), at the end of this file, for the fast one.
+
 The FPGA sends its test pattern in place of the probes (a counter of the samples), in both formats and from
 1 MS/s to 200 MS/s, and every word that arrives is compared with it.  Some captures end at their sample count
 and some are ended by the computer.  Three are meant to overflow: they make 100 million words a second or more,
@@ -152,4 +154,70 @@ def selftest(board, log=print, scale=1.0):
     if usb2:
         log("The link is USB 2.0 (480 Mbit/s): %d of the captures make more words a second than it carries and "
             "overflowed.  A USB 3 port and cable carry them." % slow)
+    return passed
+
+
+# ---- the fast design -----------------------------------------------------------------------------------------------
+
+# Its stream is the standard design's with a frame (the samples of 5.33 ns) for a sample, so these are counted in
+# frames, of which there are 187.5 million a second whichever inputs are taken.  Inputs, format, the pattern's
+# shift, seconds, and whether the computer ends the capture.
+FAST_CASES = (("A0-A3", "rle", 8, 2.0, False), ("B4-B7", "rle", 2, 1.0, False), ("A", "rle", 15, 2.0, False),
+              ("B", "rle", 4, 1.0, False), ("all", "rle", 3, 1.0, False), ("A4-A7", "rle", 8, 0.7, True),
+              ("B0-B3", "rle", 0, 0.2, False), ("A0-A3", "raw", 0, 0.5, False), ("B", "raw", 0, 0.5, False),
+              ("all", "raw", 3, 0.5, False), ("A0-A3", "raw", 0, 0.5, True))
+# as WHOLE and ENDS above: what the board's own buffers hold, and sizes at which the data ends in each of USB's ways
+FAST_WHOLE = (("raw", 60000), ("rle", 15000))
+FAST_ENDS = (("raw", 25600), ("rle", 12800), ("raw", 32768), ("raw", 524288), ("raw", 25602))
+FRAMES = 187.5e6                            # a second
+EDGE = 90e6                                 # words a second from which a capture is at the edge of what USB carries
+
+
+def selftest_fast(board, log=print, scale=1.0):
+    """The same for the fast design, which is loaded first: its test pattern (a counter of the frames) in both
+    formats and with each choice of inputs, every word compared.  Returns True if every word of every capture was
+    right.  The raw format makes 93.75 million words a second, about what the board and USB carry at the most; a
+    raw capture that overflows is whole up to its last frame and is not counted as wrong, and how many did is
+    said at the end."""
+    from . import fast as F
+    passed, edge = True, 0
+    usb2 = board.status()["speed"] == 2
+    cases = (FAST_CASES + tuple(("A0-A3", fmt, 0, n, "whole") for fmt, n in FAST_WHOLE)
+             + tuple(("A", fmt, 0, n, "count") for fmt, n in FAST_ENDS))
+    for inputs, fmt, shift, seconds, how in cases:
+        per = F.mode_of(inputs).per
+        if how in ("whole", "count"):       # a number of frames, not seconds
+            cap = board.capture_fast(inputs, samples=seconds * per, fmt=fmt, test=shift)
+        elif how:
+            end = time.monotonic() + seconds * scale
+            cap = board.capture_fast(inputs, samples=0, fmt=fmt, test=shift, cancel=lambda: time.monotonic() >= end)
+        else:
+            cap = board.capture_fast(inputs, seconds=seconds * scale, fmt=fmt, test=shift)
+        problems = list(cap.problems)
+        if how == "whole" and cap.overflow:
+            problems.append("it overflowed, and is small enough for the board's own buffers")
+        a_second = words_a_second(fmt, FRAMES, shift)
+        if cap.overflow and how != "whole" and a_second < EDGE and not usb2:
+            problems.append("it overflowed at %.3g million words a second" % (a_second / 1e6))
+        passed = passed and not problems
+        edge += bool(cap.overflow and EDGE <= a_second < 100e6 and how != "whole")
+        note = ("; OVERFLOW after %.4f s" % cap.seconds if cap.overflow
+                else "; ended by the computer" if how is True else "")
+        log("%-5s %-4s %6.5g MS/s  pattern shifted by %2d  %11d frames  %10d words  %6.1f MB/s  %s"
+            % (inputs, fmt, cap.rate / 1e6, shift, cap.samples // per, cap.info["words"],
+               cap.info["words"] * 4 / max(cap.info["read_seconds"], 1e-9) / 1e6,
+               "WRONG: " + "; ".join(problems) if problems else "every word right" + note))
+    for inputs in ("A0-A3", "A4-A7", "B0-B3", "B4-B7", "A", "B", "all"):       # the inputs themselves
+        cap = board.capture_fast(inputs, seconds=0.05 * scale)
+        problems = list(cap.problems) + (["it overflowed"] if cap.overflow and not usb2 else [])
+        passed = passed and not problems
+        log("%-5s the inputs  %6.5g MS/s  %11d samples  %10d words  %s"
+            % (inputs, cap.rate / 1e6, cap.samples, cap.info["words"],
+               "WRONG: " + "; ".join(problems) if problems else "arrived whole"))
+    if edge:
+        log("%d of the captures that make 93.75 million words a second overflowed: this computer or this link "
+            "did not carry them without a pause.  What arrived of them was right." % edge)
+    if usb2:
+        log("The link is USB 2.0 (480 Mbit/s): the fast design makes more words a second than it carries.  "
+            "A USB 3 port and cable carry them.")
     return passed

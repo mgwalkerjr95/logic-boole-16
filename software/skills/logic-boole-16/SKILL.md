@@ -18,6 +18,8 @@ read times and protocol messages off that file. `info`, `inputs`, `threshold`, `
   two pods.
 - It samples at 200 MS/s divided by a whole number: 200M, 100M, 50M, 10M, 1M ... The board takes the nearest
   rate to the one asked for, and the answer says which.
+- With `--fast` it samples fewer inputs faster: four at 750 MS/s, a pod of eight at 375 MS/s (see "Faster than
+  200 MS/s").
 - It sends only the changes of the inputs, so a high rate costs almost nothing on signals that are mostly
   idle, and a capture can be long.
 - An input with nothing connected reads 0. So "always low" has three meanings that a capture cannot tell
@@ -79,10 +81,32 @@ browser, and it does not return.
 | `--clock A0=r` | One sample at each rising edge of A0, in place of the sample rate (with `-n`) |
 | `--pi i2c` | Only with the board on a Raspberry Pi and its solder jumpers closed: the Pi's own lines in place of probes. `i2c` (SDA on A0, SCL on A1), `uart` (TXD A2, RXD A3), `spi` (MOSI A4, MISO A5, SCLK A6, CE0 A7, CE1 B0), `all`. An open jumper reads low |
 | `--raw` | Every sample, not only the changes: for signals that change at nearly every sample |
+| `--fast A0-A3` | Four inputs at 750 MS/s, or a pod (`A`, `B`) at 375 MS/s, in place of `--rate`. No trigger (see below) |
 
 **Which rate.** At least 4 times the fastest signal's bit rate to decode it, 10 times or more to measure its
 timing. A time read off a capture can be off by one sample at each end, so the rate sets the resolution: 5 ns
 at 200M, 1 us at 1M. When unsure go higher; idle time costs nothing.
+
+**Faster than 200 MS/s.** `--fast` loads the board's second FPGA design, which trades inputs for speed:
+
+| `--fast` | Inputs | Rate | A sample every |
+|---|---|---|---|
+| `A0-A3`, `A4-A7`, `B0-B3`, `B4-B7` | 4 | 750 MS/s | 1.33 ns |
+| `A`, `B` | a pod of 8 | 375 MS/s | 2.67 ns |
+| `all` | 16 | 187.5 MS/s | 5.33 ns |
+
+    logicboole capture --json --fast A0-A3 --raw -t 2ms -a 1.65 clk.lb16
+
+Use it for a clock above 85 MHz (at 200 MS/s some inputs miss periods above that; at 750 MS/s clocks up to
+200 MHz are seen whole), or for timing finer than 5 ns between signals in one group of four. It takes samples
+and sends them, nothing more: it goes without `--rate`, `--trigger`, `--before`, `--timeout`, `--glitch`,
+`--clock` and `--pi`, so the capture starts at once. The length is 10 ms if `--time` is not given. Add `--raw`
+for signals faster than about 15 MHz: the run-length format makes more data than raw on those and overflows.
+At 200 MHz the threshold has to sit at half the logic voltage, or the board loses periods. The next capture
+without `--fast` loads the standard design again, by itself, and the thresholds stay as set.
+
+In the answer `info.fast` names the choice and `info.inputs` the inputs taken. The other inputs still appear in
+`channels`, reading 0 with no changes: they were not sampled, so say nothing about them.
 
 **Save as `.lb16`.** It is small, and `measure` and `decode` read it. Name `.sr`, `.vcd` or `.csv` files as
 well only when the user wants to open the capture in PulseView, GTKWave or a spreadsheet; an `.sr` file holds
@@ -235,7 +259,8 @@ master ending the read, which is normal. With the acks and the data left out the
 
 `logicboole mcp` is a Model Context Protocol server with the same abilities as tools (`board_info`,
 `set_thresholds`, `read_inputs`, `capture`, `measure`, `decode`, `list_decoders`, `self_test`), for an agent
-that cannot run commands. With a shell, the commands above are enough.
+that cannot run commands. `capture` takes `fast` as `--fast` above, and lists the inputs it did not take in
+`not_taken`; `self_test` takes `fast: true`. With a shell, the commands above are enough.
 
 ## If the board itself is in doubt
 
@@ -243,4 +268,5 @@ that cannot run commands. With a shell, the commands above are enough.
 compares every word that arrives. It needs nothing connected to the probes; its captures run for a little over
 20 seconds in all, so allow a minute. A board that passes carries data correctly from the FPGA to the computer;
 what it does not check is the inputs themselves. On a USB 2.0 link it still passes, and its last lines say
-how many of its captures overflowed because that link carries less.
+how many of its captures overflowed because that link carries less. `logicboole selftest --fast` does the same
+for the fast design, with each choice of inputs.

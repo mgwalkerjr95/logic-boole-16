@@ -2,6 +2,10 @@
 
 The design in the board's FPGA, a Xilinx Spartan-6 XC6SLX9-2TQG144C, written in Verilog.
 
+There are two designs. This file is about the one the board is used with, `capture2_top.v`, up to the section
+[The fast design](#the-fast-design), which is about the other: `fast_top.v`, fewer inputs at more samples a
+second.
+
 ## What it does
 
 The FPGA takes the outputs of the 16 comparators at both edges of its 100 MHz clock, which a PLL makes from the
@@ -52,11 +56,13 @@ the top of `capture2_top.v` describes the design itself.
 | `pins.ucf` | The board's constraints: pin numbers and I/O standards for revision C, and the clock periods |
 | `capture2.ucf` | What this design adds to them: the INIT_B pin, and the drive strength of the lines to the FX3 |
 | `sim/capture2_tb.v` | A test bench that checks itself, with a model of the FX3's slave FIFO and an I2C master |
-| `sim/xilinx_stubs.v` | Stand-ins for the Xilinx primitives, for the simulation only |
+| `sim/xilinx_stubs.v` | Stand-ins for the Xilinx primitives of both designs, for the simulation only |
 | `sim.sh` | Runs the simulation |
-| `build.sh` | Builds the bitstream with ISE 14.7 |
+| `build.sh` | Builds a bitstream with ISE 14.7: this design's, or with `./build.sh fast` the fast design's |
+| `fast_top.v`, `fast.ucf`, `sim/fast_tb.v`, `sim_fast.sh` | [The fast design](#the-fast-design): its top module, its constraints, its test bench and its simulation |
 
-`build.sh` writes to `build/` and `sim.sh` to `sim/build/`. Git ignores both.
+`build.sh` writes to `build/` (the fast design: `build-fast/`) and the simulations to `sim/build/`. Git ignores
+them.
 
 ## Simulating
 
@@ -165,6 +171,101 @@ To run a build on the board without installing it:
 LED ARM blinks at 1 Hz once the design runs. Then `../logicboole selftest` checks the whole path from the FPGA to
 the computer with the design's test pattern, every word compared. `../logicboole load` with no file goes back to
 the published bitstream.
+
+## The fast design
+
+`fast_top.v` is a second design for the same board, loaded in place of the first when a capture asks for it
+(`logicboole capture --fast A0-A3`). It takes samples and sends them, and nothing else: no trigger, no glitch
+filter, no capture clock, no Pi lines. In return it takes the inputs 750 million times a second.
+
+| Inputs | Samples a second | A sample every |
+|---|---|---|
+| 4: A0 to A3, A4 to A7, B0 to B3 or B4 to B7 | 750 million | 1.33 ns |
+| 8: pod A or pod B | 375 million | 2.67 ns |
+| All 16 | 187.5 million | 5.33 ns |
+
+**How it samples.** Each input pad of a Spartan-6 has a 1:4 deserializer (ISERDES2). A second PLL makes 750 MHz
+from the design's 100 MHz, a BUFPLL carries it to the pads of bank 3, where all 16 inputs are, and each pad takes
+its input at every rising edge. The pads hand over four samples at a time in a clock of a quarter of that,
+187.5 MHz. In each of its cycles the design keeps 16 bits, a frame: all four samples of four inputs, every second
+sample of eight, or every fourth of all 16. So the three choices make the same amount of data, and that amount is
+what the board can pass on: in the raw format 93.75 million words a second, where the standard design was
+measured at 96 million.
+
+**Two clocks.** The sampler, the words and the write side of the FIFO run at 187.5 MHz. The registers, the read
+side of the FIFO and everything the FX3 sees run at 100 MHz and are taken from `capture2_top.v` unchanged. The
+FIFO's pointers cross in Gray code, and `fast.ucf` keeps the crossing paths shorter than a clock cycle.
+
+**The stream** is the standard design's with a frame where that has a sample: raw, two frames in a word;
+run-length, a frame and how many more frames were equal to it. [`../docs/protocol.md`](../docs/protocol.md) has
+its registers and the frames.
+
+Simulate it with `sh sim_fast.sh`: 32 runs, which end with `PASS`. The test bench writes down the 16 pins at
+every rising edge of the 750 MHz clock, and the samples that come out of the words must be those, one after
+the other with none left out, in every choice of inputs and in both formats. It also checks captures of 1 to
+5 frames, an odd number of frames, a run of more than 65536 frames, the test pattern, RUN falling during a
+capture and at every place around its start, a computer that does not read (overflow, and what arrives is
+whole), data that is thrown away after RUN has fallen and is not in the next capture, the registers, the lines
+to the FX3 and their timing, and the FX3's flag arriving 0 to 8 cycles late. The pads' deserializers, the
+second PLL and the BUFPLL are `sim/xilinx_stubs.v`'s models of them, not Xilinx's: the simulation shows the
+design around them. Which of a pad's four outputs holds the latest sample is taken from Xilinx's user guide
+UG381 (the last bit received is Q4), and a bit of register 08 turns the order round to check that on a board.
+
+Build it and install the build:
+
+    ./build.sh fast
+    cp build-fast/fast.bin ../software/logicboole/data/gateware-fast.bin
+
+`build.sh` prints the shortest period each clock reaches and the longest delay of each crossing.
+`../logicboole selftest --fast` then loads it and checks the path with its test pattern, every word compared.
+
+**The published bitstream.** `../software/logicboole/data/gateware-fast.bin` is this design, version 1, built
+with ISE 14.7 by `./build.sh fast`.
+
+| | |
+|---|---|
+| Size | 340,604 bytes |
+| SHA-256 | `cc01099fcb7381ee7f439b5b945d85f5ad8c9982c5253dd8865867a5de3bd371` |
+| Timing errors | 0 |
+| 187.5 MHz clock (5.333 ns period) | Minimum period 4.874 ns: 0.459 ns of setup slack. Hold slack 0.378 ns |
+| 100 MHz clock (10 ns period) | Minimum period 9.185 ns: 0.815 ns of setup slack. Hold slack 0.382 ns |
+| Between the two clocks | 187.5 MHz to 100 MHz: 3.340 ns at the most, of 4 ns allowed. The other way: 6.314 ns, of 8 ns |
+| 750 MHz clock | From the second PLL through one BUFPLL to the 16 input pads. Skew between the pads 0.010 ns |
+| Slice registers | 1,224 of 11,440 (10%) |
+| Slice LUTs | 1,158 of 5,720 (20%) |
+| Occupied slices | 477 of 1,430 (33%) |
+| Block RAM | 16 of 32 RAMB16 (50%): the FIFO, 8192 words of 32 bits |
+| Input deserializers | 16 ISERDES2, one in the pad of each input |
+| Clock buffers | 2 of 16 BUFG, 1 of 8 BUFPLL |
+| PLLs | 2 of 2 |
+
+The timing is ISE's analysis for the -2 speed grade at its default conditions, 85 °C and 1.14 V. The 750 MHz
+clock is within the device's limits for that grade (Xilinx's data sheet DS162: BUFPLL and PLL output 950 MHz,
+ISERDES2 at 1:4 950 Mb/s, the deserializer's slow clock 250 MHz).
+
+**On a board.** Measured with this bitstream on one board, connected to a Mac, with an Si5351A clock generator
+on B0, B1 and A2:
+
+- `logicboole selftest --fast`: every word right with each choice of inputs, in both formats. Raw captures, 93.75
+  million words a second (364 to 375 MB/s), ran for 0.5 s each without an overflow.
+- Clocks of 1.0003, 10.007, 24.31, 50.01, 70.01 and 85.01 MHz on B0 and on A2, with 100 kHz on B1 beside them,
+  captured with each choice of inputs that holds them: the number of edges was the frequency times the length
+  (the generator's crystal ran 106 ppm fast), and the periods differed by 1 or 2 samples.
+- The spacing of the samples, from where the edges of a clock that is not locked to the board fall in the frames:
+  1329 to 1337 ps with four inputs (1333 is even), 2659 to 2674 ps with a pod.
+- The order of the four samples: with register 08 bit 4 set, a 10 MHz clock showed 2.5 times as many edges.
+- Faster clocks, from 85 to 199.9 MHz (the generator's highest), on B0 and A2 with four inputs: every edge on B0
+  up to 199.9 MHz. On A2 every edge up to 180 MHz, and at 199.9 MHz 16 of 800,000 pulses were missed. With a pod
+  at 375 MS/s, every edge on B0 up to 140 MHz.
+- The other 14 inputs, three at a time, at 10, 50, 100, 150, 180 and 199.9 MHz with four inputs: every edge on
+  every one of them at every frequency, with the thresholds at 1.56 V.
+- At 200 MHz the signal that reaches a comparator is rounded, so the threshold sets the duty cycle: on A5 and A7
+  at 199.9 MHz, 67 % at a threshold of 1.4 V, 60 % at 1.56 V, 52 % at 1.7 V and 40 % at 1.9 V, with every edge
+  from 1.4 to 1.9 V and edges missed at 1.2 and 2.1 V. At 10 MHz the same thresholds gave 50.6 to 50.0 %. At 1.56 V
+  pod B read 52 to 54 % at 199.9 MHz and pod A 57 to 62 %.
+- With the generator's outputs on B0 and A2 switching together at 70 MHz and up, B1 showed their edges, with the
+  standard design as well. It was the generator: its ground and supply, on long wires, bounced. With A2's output
+  inverted, so that the two switch in opposite directions, B1 was right at every frequency.
 
 ## The published bitstream
 

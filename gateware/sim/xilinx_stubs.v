@@ -1,9 +1,10 @@
 // Copyright (C) 2026 Michael Walker
 // SPDX-License-Identifier: CERN-OHL-S-2.0
 //
-// Stand-ins for the Xilinx primitives of capture2_top.v, for the simulation only.  The JTAG block's outputs come
-// from its "t_" registers, which a test bench can drive; capture2_tb.v leaves them at 0.  The PLL here makes its
-// output's period from its parameters and "locks" 2 us after the start; it does not follow its input clock.
+// Stand-ins for the Xilinx primitives of capture2_top.v and fast_top.v, for the simulation only.  The JTAG block's
+// outputs come from its "t_" registers, which a test bench can drive; capture2_tb.v leaves them at 0.  The PLL here
+// makes its output's period from its parameters and "locks" 2 us after the start; it does not follow its input
+// clock.  Its second output is its first divided down, for a whole even ratio of the two dividers only.
 `timescale 1ns / 1ps
 module PULLDOWN (output O);
     pulldown (O);
@@ -25,20 +26,86 @@ module PLL_BASE #(
     parameter BANDWIDTH = "OPTIMIZED", CLK_FEEDBACK = "CLKFBOUT", COMPENSATION = "INTERNAL",
     parameter real CLKIN_PERIOD = 10.0, REF_JITTER = 0.01,
     parameter integer DIVCLK_DIVIDE = 1, CLKFBOUT_MULT = 1, CLKOUT0_DIVIDE = 1,
-    parameter real CLKFBOUT_PHASE = 0.0, CLKOUT0_PHASE = 0.0, CLKOUT0_DUTY_CYCLE = 0.5
+    parameter real CLKFBOUT_PHASE = 0.0, CLKOUT0_PHASE = 0.0, CLKOUT0_DUTY_CYCLE = 0.5,
+    parameter integer CLKOUT1_DIVIDE = 1,
+    parameter real CLKOUT1_PHASE = 0.0, CLKOUT1_DUTY_CYCLE = 0.5
 ) (
     input CLKIN, CLKFBIN, RST,
-    output CLKFBOUT, CLKOUT1, CLKOUT2, CLKOUT3, CLKOUT4, CLKOUT5,
-    output reg CLKOUT0, LOCKED
+    output CLKFBOUT, CLKOUT2, CLKOUT3, CLKOUT4, CLKOUT5,
+    output reg CLKOUT0, CLKOUT1, LOCKED
 );
     localparam real HALF = CLKIN_PERIOD * DIVCLK_DIVIDE * CLKOUT0_DIVIDE / CLKFBOUT_MULT / 2.0;
-    assign CLKFBOUT = 0, CLKOUT1 = 0, CLKOUT2 = 0, CLKOUT3 = 0, CLKOUT4 = 0, CLKOUT5 = 0;
+    localparam integer RATIO = CLKOUT1_DIVIDE / CLKOUT0_DIVIDE;
+    localparam DIVIDED = (RATIO >= 2) && (RATIO % 2 == 0) && (RATIO * CLKOUT0_DIVIDE == CLKOUT1_DIVIDE);
+    assign CLKFBOUT = 0, CLKOUT2 = 0, CLKOUT3 = 0, CLKOUT4 = 0, CLKOUT5 = 0;
+    integer rises = 0;
     initial begin
         CLKOUT0 = 0;
+        CLKOUT1 = 0;
         LOCKED = 0;
         #2000 LOCKED = 1;
         forever #(HALF) CLKOUT0 = ~CLKOUT0;
     end
+    // the second output changes at every (RATIO / 2)th rising edge of the first: its rising edges are the first's
+    always @(posedge CLKOUT0) if (DIVIDED) begin
+        rises = rises + 1;
+        if (rises == RATIO / 2) begin
+            rises = 0;
+            CLKOUT1 <= ~CLKOUT1;
+        end
+    end
+endmodule
+
+// The clock buffer of a bank's pads: the fast clock goes through, and the strobe is high in the cycle of the fast
+// clock that ends where GCLK, the fast clock divided by DIVIDE, rises.  LOCK follows the PLL's LOCKED.
+module BUFPLL #(parameter integer DIVIDE = 1, parameter ENABLE_SYNC = "TRUE") (
+    output IOCLK,
+    output reg LOCK, SERDESSTROBE,
+    input GCLK, LOCKED, PLLIN
+);
+    assign IOCLK = PLLIN;
+    integer at = 0;                     // which of GCLK's DIVIDE edges of the fast clock this one is; 0: GCLK rises
+    reg g_was = 0;
+    initial begin
+        LOCK = 0;
+        SERDESSTROBE = 0;
+    end
+    always @(posedge PLLIN) begin
+        at = (GCLK && !g_was) ? 1 : (at + 1) % DIVIDE;     // GCLK is seen high from the edge after its own
+        g_was <= GCLK;
+        SERDESSTROBE <= (at == DIVIDE - 1);
+        LOCK <= LOCKED;
+    end
+endmodule
+
+// A pad's 1:4 deserializer, as fast_top.v uses it and no other way: single data rate, four bits, no cascade, no
+// bit slip.  The pad takes D at each rising edge of CLK0; at the edge where IOCE is high the last four go to a
+// holding register, and at CLKDIV's rising edge they appear on Q1 ... Q4, Q4 being the one taken last.
+module ISERDES2 #(
+    parameter integer DATA_WIDTH = 4,       // (the defaults are what is modelled, not Xilinx's)
+    parameter DATA_RATE = "SDR", BITSLIP_ENABLE = "FALSE", SERDES_MODE = "NONE", INTERFACE_TYPE = "RETIMED"
+) (
+    output CFB0, CFB1, DFB, FABRICOUT, INCDEC, SHIFTOUT, VALID,
+    output reg Q1, Q2, Q3, Q4,
+    input BITSLIP, CE0, CLK0, CLK1, CLKDIV, D, IOCE, RST, SHIFTIN
+);
+    assign CFB0 = 0, CFB1 = 0, DFB = 0, FABRICOUT = 0, INCDEC = 0, SHIFTOUT = 0, VALID = 0;
+    reg [3:0] sr = 0, held = 0;
+    initial begin
+        {Q4, Q3, Q2, Q1} = 0;
+        if (DATA_WIDTH != 4 || DATA_RATE != "SDR" || BITSLIP_ENABLE != "FALSE" || SERDES_MODE != "NONE"
+            || INTERFACE_TYPE != "RETIMED") begin
+            $display("FAIL: this ISERDES2 models 4 bits, SDR, RETIMED, no bit slip and no cascade only");
+            $finish;
+        end
+    end
+    always @(posedge CLK0) if (CE0) begin
+        sr <= {D, sr[3:1]};
+        if (IOCE)
+            held <= {D, sr[3:1]};
+    end
+    always @(posedge CLKDIV)
+        {Q4, Q3, Q2, Q1} <= RST ? 4'd0 : held;
 endmodule
 
 module ODDR2 #(parameter DDR_ALIGNMENT = "NONE", parameter INIT = 1'b0, parameter SRTYPE = "SYNC") (

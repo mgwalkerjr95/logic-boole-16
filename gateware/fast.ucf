@@ -1,0 +1,32 @@
+# Copyright (C) 2026 Michael Walker
+# SPDX-License-Identifier: CERN-OHL-S-2.0
+#
+# What the fast design (fast_top.v) adds to the board's pin constraints in pins.ucf: "build.sh fast" reads both
+# files.
+#
+# INIT_B is an ordinary pin once the FPGA is configured.  The design makes it an input with a pull-up, so that the
+# board's 4.7k pull-up is not worked against and the FX3 reads it high.
+NET "init_b" LOC = "P39" | IOSTANDARD = LVCMOS18;    # IO_L65P_INIT_B_2, bank 2
+
+# The lines the FPGA drives to the FX3, as in capture2.ucf: 8 mA, about 40 ohms at 1.8 V, the clock and the data
+# alike.
+NET "fx3_pclk" DRIVE = 8 | SLEW = FAST;
+NET "fx3_dq<*>" DRIVE = 8 | SLEW = FAST;
+NET "fx3_ctl0" DRIVE = 8 | SLEW = FAST;
+NET "fx3_ctl1" DRIVE = 8 | SLEW = FAST;
+NET "fx3_ctl2" DRIVE = 8 | SLEW = FAST;
+NET "fx3_ctl3" DRIVE = 8 | SLEW = FAST;
+NET "fx3_ctl7" DRIVE = 8 | SLEW = FAST;
+NET "fx3_ctl11" DRIVE = 8 | SLEW = FAST;
+NET "fx3_ctl12" DRIVE = 8 | SLEW = FAST;
+
+# The two clocks.  "clk" is the 100 MHz clock of everything the FX3 sees, "sclk" the 187.5 MHz clock of the
+# sampler; the tools work out both periods, and the 750 MHz clock of the pads, from the 24 MHz constraint in
+# pins.ucf.  What goes from one clock to the other is made for it in fast_top.v (two flip-flops, Gray code, or
+# values that stand still), so those paths are not timed against the clocks' edges.  They are only kept short:
+# shorter than a cycle of the clock they come from, so that two bits of a Gray-coded pointer which change one
+# cycle apart cannot arrive in the wrong order.
+NET "clk" TNM_NET = "g_clk";
+NET "sclk" TNM_NET = "g_sclk";
+TIMESPEC "TS_clk_to_sclk" = FROM "g_clk" TO "g_sclk" 8 ns DATAPATHONLY;
+TIMESPEC "TS_sclk_to_clk" = FROM "g_sclk" TO "g_clk" 4 ns DATAPATHONLY;

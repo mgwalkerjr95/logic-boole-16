@@ -30,9 +30,10 @@ from http.server import ThreadingHTTPServer
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 import logicboole                                           # noqa: E402
-from logicboole import board as B, cli, decode as D, fake, mcp, server, trigger as T, usb, words as W   # noqa: E402
+from logicboole import board as B, cli, decode as D, fake, fast as F, mcp, server, trigger as T, usb   # noqa: E402
+from logicboole import words as W                           # noqa: E402
 from logicboole.capture import CHANNELS, Capture            # noqa: E402
-from logicboole.selftest import selftest                    # noqa: E402
+from logicboole.selftest import selftest, selftest_fast     # noqa: E402
 
 
 def coded(runs, fmt):
@@ -1393,6 +1394,29 @@ class TheAgentsServer(unittest.TestCase):
         wrong, m = self.tool("measure", file=cap["file"])
         self.assertIn("sample numbers", m["clock"])
 
+    def test_the_fast_design_through_it(self):
+        wrong, cap = self.tool("capture", fast="A0-A3", seconds=200e-6)
+        self.assertEqual((wrong, cap["ok"], cap["fast"], cap["sample_rate"], cap["samples"]), (False, True, "A0-A3", 750e6, 150000))
+        self.assertEqual((sorted(cap["changing"]), cap["steady_low"], len(cap["not_taken"])), (["A0", "A1"], ["A2", "A3"], 12))
+        back = Capture.load(cap["file"])
+        self.assertEqual(samples_of(back.values, back.lengths), samples_of(*zip(*fake.probe_runs(0, 150000, 750e6))))
+        wrong, m = self.tool("measure", file=cap["file"], channels=["A1"])
+        self.assertEqual((wrong, m["channels"][0]["frequency"]), (False, 100e3))
+        wrong, pod = self.tool("capture", fast="pod b", samples=1000, raw=True)
+        self.assertEqual((wrong, pod["fast"], pod["sample_rate"], pod["samples"], pod["not_taken"][0]), (False, "B", 375e6, 1000, "A0"))
+        wrong, cap = self.tool("capture", rate=2e6, seconds=0.01)      # the standard design again
+        self.assertEqual((wrong, cap["sample_rate"], "fast" in cap, "not_taken" in cap, len(cap["steady_low"])), (False, 2e6, False, False, 14))
+        for args, why in (({"fast": "A0-A3", "trigger": "A0=r"}, "fast goes without trigger"),
+                          ({"fast": "A", "rate": 375e6, "glitch": "50ns"}, "fast goes without rate and glitch"),
+                          ({"fast": "C0-C3"}, "The fast design takes four inputs"),
+                          ({"fast": "B4-B7", "seconds": 10}, "at the most")):
+            wrong, said = self.tool("capture", **args)
+            self.assertTrue(wrong, args)
+            self.assertIn(why, said)
+        wrong, test = self.tool("self_test", fast=True)
+        self.assertEqual((wrong, test["passed"]), (False, True))
+        self.assertTrue(any("A0-A3" in line for line in test["captures"]))
+
     def test_decoders_through_it(self):
         Decoders.setUp(self)
         wrong, found = self.tool("decode", file=self.path("a.lb16"), decoders="i2c scl=A1 sda=A0", limit=3)
@@ -1574,6 +1598,245 @@ class TheCommandLine(unittest.TestCase):
                            (("capture", "--trigger", "A0=1 for 1us", "--clock", "A1", "-n", "5"), "no sample rate"),
                            (("capture", "--glitch", "2us"), "10 ns"),
                            (("capture", "--pi", "gpio4"), "gpio4 is not one of the Pi's lines")):
+            code, out, err = self.run_it(*words)
+            self.assertNotEqual(code, 0, words)
+            self.assertIn(why, out + err, words)
+
+
+class TheFastDesign(unittest.TestCase):
+    """The second FPGA design: 4 inputs at 750 MS/s, 8 at 375 MS/s or 16 at 187.5 MS/s (logicboole/fast.py)."""
+
+    def bus(self, **more):
+        return fake.FakeBus(instant=True, **more)
+
+    def loads(self, bus):
+        return len([r for r in bus.requests if r[0] == 0xB3])
+
+    def test_the_names_of_the_inputs(self):
+        for text, name in (("A0-A3", "A0-A3"), ("a4..a7", "A4-A7"), (" b0 - b3 ", "B0-B3"), ("B4...B7", "B4-B7"),
+                           ("a", "A"), ("pod b", "B"), ("B0-B7", "B"), ("all", "all"), (16, "all")):
+            self.assertEqual(F.mode_of(text).name, name, text)
+        self.assertEqual([(m.per, m.bits, m.shift, m.rate(750e6)) for m in map(F.mode_of, ("B0-B3", "B", "all"))],
+                         [(4, 4, 8, 750e6), (2, 8, 8, 375e6), (1, 16, 0, 187.5e6)])
+        self.assertEqual(F.mode_of("A4-A7").channels, ["A4", "A5", "A6", "A7"])
+        self.assertEqual(sorted(F.BY_REGISTER), [0, 1, 2, 5, 6, 10, 14])
+        for text in ("A1-A4", "C", "", "A0-A3,B"):
+            with self.assertRaisesRegex(ValueError, "The fast design takes four inputs"):
+                F.mode_of(text)
+
+    def test_frames_worked_out_by_hand(self):
+        # A4 ... A7, four samples a frame, the earliest in the lowest four bits: 4, 3, 2, 1 and then five frames
+        # of nothing
+        frames, counts = array("H", [0xAAAA, 0x1234, 0x0000]), array("Q", [3, 1, 5])
+        values, lengths = F.sample_runs(frames, counts, F.MODES["A4-A7"])
+        self.assertEqual((list(values), list(lengths)), ([0xA0, 0x40, 0x30, 0x20, 0x10, 0], [12, 1, 1, 1, 1, 20]))
+        # pod B, two samples a frame: the earlier in the low byte.  The frame 0x55AA twice is AA 55 AA 55
+        values, lengths = F.sample_runs(array("H", [0x55AA, 0x5555]), array("Q", [2, 1]), F.MODES["B"])
+        self.assertEqual((list(values), list(lengths)), ([0xAA00, 0x5500, 0xAA00, 0x5500], [1, 1, 1, 3]))
+        # all 16: a frame is a sample
+        values, lengths = F.sample_runs(array("H", [7, 9]), array("Q", [4, 1]), F.MODES["all"], samples=4)
+        self.assertEqual((list(values), list(lengths)), ([7], [4]))
+
+    def test_samples_to_frames_and_back(self):
+        rng = random.Random(16)
+        for mode in F.MODES.values():
+            for _ in range(20):
+                runs = random_runs(rng, 200, 40)
+                keep = mode.mask << mode.shift
+                want = [v & keep for v in samples_of(*zip(*runs))]
+                want = want[:len(want) - len(want) % mode.per]          # whole frames
+                frames = list(F.frame_runs(runs, mode))
+                self.assertEqual(sum(n for _, n in frames) * mode.per, len(want))
+                values, lengths = F.sample_runs([f for f, _ in frames], [n for _, n in frames], mode)
+                self.assertEqual(samples_of(values, lengths), want, mode)
+                self.assertTrue(all(x != y for x, y in zip(values, values[1:])))    # no run in two pieces
+                # and through the words of both formats
+                for fmt in ("rle", "raw"):
+                    data = coded(frames, fmt)
+                    values, lengths = F.sample_runs(*W.runs_of(data, fmt, sum(n for _, n in frames)), mode)
+                    self.assertEqual(samples_of(values, lengths), want, (mode, fmt))
+
+    def test_a_capture_of_the_inputs(self):
+        bus = self.bus()
+        with B.connect(backend=bus) as board:
+            self.assertEqual(self.loads(bus), 1)
+            before = len(bus.requests)
+            cap = board.capture_fast("A0-A3", seconds=0.0004)
+            self.assertEqual(self.loads(bus), 2)                    # the fast design was loaded
+            codes = [r[0] for r in bus.requests[before:] if r[0] >= 0xC0 and r[0] < 0xD0]
+            self.assertEqual(codes, [0xC0, 0xC3, 0xC2, 0xC4, 0xC4, 0xC5, 0xC3])     # as a standard capture's
+            self.assertEqual((cap.ok, cap.samples, cap.rate, cap.overflow, cap.stopped),
+                             (True, 300000, 750e6, False, None))
+            self.assertEqual((cap.info["fast"], cap.info["inputs"]), ("A0-A3", ["A0", "A1", "A2", "A3"]))
+            want = samples_of(*zip(*fake.probe_runs(0, 300000, 750e6)))
+            self.assertEqual(samples_of(cap.values, cap.lengths), want)
+            self.assertGreater(len(cap.values), 50)                 # the I2C bus on A1 and A0 is in it
+            # a number of samples that is not whole frames, in both formats: those samples and no more
+            for fmt in ("raw", "rle"):
+                cap = board.capture_fast("a0..a3", samples=100001, fmt=fmt)
+                self.assertEqual((cap.ok, cap.samples), (True, 100001), fmt)
+                self.assertEqual(samples_of(cap.values, cap.lengths), want[:100001], fmt)
+            # a pod at half the rate, all 16 at a quarter: the same signals, taken less often
+            cap = board.capture_fast("A", samples=150001, fmt="raw")
+            self.assertEqual((cap.ok, cap.samples, cap.rate), (True, 150001, 375e6))
+            self.assertEqual(samples_of(cap.values, cap.lengths), samples_of(*zip(*fake.probe_runs(0, 150001, 375e6))))
+            cap = board.capture_fast("all", seconds=0.0004)
+            self.assertEqual((cap.ok, cap.samples, cap.rate), (True, 75000, 187.5e6))
+            self.assertEqual(samples_of(cap.values, cap.lengths), samples_of(*zip(*fake.probe_runs(0, 75000, 187.5e6))))
+            # inputs with nothing on them read low, and so do the inputs that were not taken
+            cap = board.capture_fast("B4-B7", seconds=0.0001)
+            self.assertEqual((cap.ok, list(cap.values), list(cap.lengths)), (True, [0], [75000]))
+            self.assertEqual(self.loads(bus), 2)                    # and the design was loaded once for all of them
+
+    def test_one_design_takes_the_others_place_and_the_thresholds_stay(self):
+        bus = self.bus()
+        with B.connect(backend=bus) as board:
+            board.set_thresholds(1.2, 2.5)
+            self.assertEqual(board.registers()["design"], "standard")
+            self.assertTrue(board.capture_fast("B", seconds=0.0001).ok)
+            r = board.registers()
+            self.assertEqual((r["design"], r["version"], r["fastest"], r["mode"]), ("fast", 1, 750e6, 5))
+            self.assertAlmostEqual(board.thresholds()[0], 1.2, delta=0.001)
+            self.assertAlmostEqual(board.thresholds()[1], 2.5, delta=0.001)
+            found = B.look(bus)
+            self.assertEqual((found["state"], found.get("fast")), ("ready", True))
+            self.assertIn("the fast design loaded", found["text"])
+            self.assertEqual(board.inputs(), 3)
+            cap = board.capture(rate=2e6, seconds=0.01, b=3.0)      # the standard design again
+            self.assertEqual((cap.ok, board.registers()["design"]), (True, "standard"))
+            self.assertAlmostEqual(cap.thresholds[0], 1.2, delta=0.001)
+            self.assertAlmostEqual(cap.thresholds[1], 3.0, delta=0.001)
+            self.assertNotIn("fast", B.look(bus))
+            self.assertEqual(self.loads(bus), 3)
+        # a board found with the fast design running is left with it until a capture needs the other
+        with B.connect(backend=bus) as board:
+            board.use("fast")
+        loads = self.loads(bus)
+        with B.connect(backend=bus) as board:
+            self.assertEqual((board.registers()["design"], self.loads(bus)), ("fast", loads))
+            self.assertTrue(board.capture_fast("A0-A3", seconds=0.0001).ok)
+            self.assertEqual(self.loads(bus), loads)
+
+    def test_the_test_pattern_in_both_formats(self):
+        with B.connect(backend=self.bus()) as board:
+            for inputs, fmt, shift, frames in (("A0-A3", "rle", 8, 300001), ("A0-A3", "raw", 0, 300001),
+                                               ("B", "rle", 0, 20000), ("B", "raw", 3, 70000),
+                                               ("all", "rle", 15, 100000), ("A4-A7", "raw", 4, 1)):
+                per = F.mode_of(inputs).per
+                cap = board.capture_fast(inputs, samples=frames * per, fmt=fmt, test=shift)
+                self.assertEqual((cap.problems, cap.samples), ([], frames * per), (inputs, fmt, shift))
+
+    def test_overflow_the_computer_ending_it_and_words_lost_on_the_way(self):
+        for fmt in ("rle", "raw"):
+            with B.connect(backend=self.bus(overflow_at=12345)) as board:      # frames
+                cap = board.capture_fast("A0-A3", seconds=0.01, fmt=fmt, test=0)
+                self.assertEqual((cap.ok, cap.overflow), (True, True))
+                self.assertIn(cap.samples, (12345 * 4, 12346 * 4))
+        bus = self.bus()
+        with B.connect(backend=bus) as board:
+            polls = []
+            cap = board.capture_fast("B", samples=0, test=8, cancel=lambda: polls.append(1) or len(polls) > 3)
+            self.assertEqual((cap.ok, cap.stopped, cap.overflow), (True, "stopped", False))
+            self.assertGreater(cap.samples, 0)
+            cap = board.capture_fast("B", seconds=10, test=0, max_bytes=1 << 20)
+            self.assertEqual((cap.ok, cap.stopped), (True, "size"))
+            bus.drop_word = 1000
+            cap = board.capture_fast("A0-A3", samples=2000000, test=4)
+            self.assertIn("words arrived, the FPGA sent", cap.problems[0])
+            bus.drop_word, bus.flip_word = None, 1000
+            cap = board.capture_fast("A0-A3", samples=2000000, test=4)
+            self.assertEqual(len(cap.problems), 1)
+            self.assertIn("word (of frames) 1000 is", cap.problems[0])
+            bus.flip_word = None
+            self.assertTrue(board.capture_fast("A0-A3", samples=2000000, test=4).ok)
+
+    def test_what_cannot_be_done_says_why(self):
+        bus = self.bus()
+        with B.connect(backend=bus) as board:
+            with self.assertRaisesRegex(ValueError, "not \"A9\""):
+                board.capture_fast("A9")
+            with self.assertRaisesRegex(B.BoardError, "shorter than one sample"):
+                board.capture_fast("A", seconds=1e-10)
+            loads = self.loads(bus)
+            bus.stream = True                                       # another program is capturing
+            with self.assertRaisesRegex(B.BoardError, "capture is running"):
+                board.capture_fast("A")
+            self.assertEqual(self.loads(bus), loads)                # and the FPGA was left as it was
+            bus.stream = False
+            board.use("standard")
+            board.designs["fast"] = os.path.join(tempfile.gettempdir(), "there-is-no-such-design.bin")
+            with self.assertRaisesRegex(B.BoardError, "The fast design's file is not there"):
+                board.capture_fast("A")
+            self.assertEqual(board.registers()["design"], "standard")
+            board.designs["fast"] = b"\xFF" * 16 + b"\xAA\x99\x55\x66" + b"not the fast design"
+            with self.assertRaisesRegex(B.BoardError, "is not the fast design"):
+                board.capture_fast("A")
+
+    def test_selftest(self):
+        lines = []
+        with B.connect(backend=self.bus()) as board:
+            self.assertTrue(selftest_fast(board, log=lines.append, scale=0.002))
+        self.assertEqual(len(lines), 25)
+        self.assertEqual(len([line for line in lines if "every word right" in line]), 18)
+        self.assertEqual(len([line for line in lines if "arrived whole" in line]), 7)
+        self.assertEqual([line for line in lines if "OVERFLOW" in line or "WRONG" in line], [])
+        # a board that overflows early: a capture that makes fewer words than the link carries must not, and the
+        # two that are small enough for the board's own buffers must not; one at the edge may, and is counted
+        lines = []
+        with B.connect(backend=self.bus(overflow_at=10000)) as board:
+            self.assertFalse(selftest_fast(board, log=lines.append, scale=0.002))
+        self.assertEqual(len([line for line in lines if "small enough for the board's own buffers" in line]), 2)
+        self.assertEqual(len([line for line in lines if "WRONG: it overflowed at" in line]), 6)
+        self.assertIn("of the captures that make 93.75 million words a second overflowed", lines[-1])
+
+
+class TheFastDesignsCommandLine(unittest.TestCase):
+    def run_it(self, *words):
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            try:
+                code = cli.main(["--fake"] + list(words))
+            except SystemExit as e:
+                code = e.code
+        return code, out.getvalue(), err.getvalue()
+
+    def test_a_capture_and_its_files(self):
+        folder = tempfile.mkdtemp()
+        try:
+            paths = [os.path.join(folder, "fast." + end) for end in ("lb16", "vcd", "sr", "csv")]
+            code, out, err = self.run_it("capture", "--fast", "A0-A3", "-t", "200us", *paths)
+            self.assertEqual(code, 0, out + err)
+            self.assertIn("750 MS/s for 0.0002 s: 150000 samples", out)
+            self.assertIn("the fast design: inputs A0 A1 A2 A3; the other inputs read low", out)
+            back = Capture.load(paths[0])
+            self.assertEqual((back.rate, back.samples, back.info["fast"]), (750e6, 150000, "A0-A3"))
+            self.assertEqual(samples_of(back.values, back.lengths),
+                             samples_of(*zip(*fake.probe_runs(0, 150000, 750e6))))
+            with open(paths[1]) as f:
+                vcd = f.read()
+            # a sample is 1.333 ns, which no unit of a VCD file divides: the times are in femtoseconds
+            self.assertIn("$timescale 1 fs $end", vcd)
+            self.assertIn("#%d\n" % (150000 * 1333333), vcd)
+            with zipfile.ZipFile(paths[2]) as z:
+                self.assertIn("samplerate=750 MHz", z.read("metadata").decode())
+            code, out, err = self.run_it("capture", "--fast", "b", "--json", "-n", "1000")
+            self.assertEqual(code, 0, out + err)
+            got = json.loads(out)
+            self.assertEqual((got["ok"], got["sample_rate"], got["samples"], got["info"]["fast"]),
+                             (True, 375e6, 1000, "B"))
+            code, out, err = self.run_it("capture", "--fast", "all", "--test", "3", "--raw", "-t", "1ms")
+            self.assertEqual(code, 0, out + err)
+            self.assertIn("every word is the test pattern's", out)
+        finally:
+            shutil.rmtree(folder)
+
+    def test_selftest_and_what_does_not_go_with_fast(self):
+        code, out, err = self.run_it("selftest", "--fast")
+        self.assertEqual(code, 0, out + err)
+        self.assertIn("The capture path passed.", out)
+        for words, why in ((("capture", "--fast", "A0-A3", "--trigger", "A0=r"), "--fast goes without --trigger"),
+                           (("capture", "--fast", "A", "-r", "100M", "--pi", "i2c"), "without --rate and --pi"),
+                           (("capture", "--fast", "A1"), "The fast design takes four inputs")):
             code, out, err = self.run_it(*words)
             self.assertNotEqual(code, 0, words)
             self.assertIn(why, out + err, words)

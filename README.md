@@ -4,7 +4,7 @@
 
 # Logic Boole 16
 
-**An open-source 16-channel, 200 MS/s logic analyzer on USB 3.**<br>
+**An open-source logic analyzer on USB 3: 16 channels at 200 MS/s, or 4 at 750 MS/s.**<br>
 It runs from one USB-C cable on a computer, or sits on a Raspberry Pi 4 or 5 as a HAT+.
 
 [![Hardware: CERN-OHL-S v2](https://img.shields.io/badge/hardware-CERN--OHL--S_v2-46553a?labelColor=20231c)](LICENSE)
@@ -25,6 +25,7 @@ the firmware, and the software for the computer. The picture is a render of the 
 | Feature | What you get |
 |---|---|
 | **16 channels at 200 MS/s** | Two pods of 8, a sample every 5 ns. Clocks up to 85 MHz are captured whole on every input |
+| **8 channels at 375 MS/s, 4 at 750 MS/s** | A second FPGA design takes fewer channels more often: a sample every 1.33 ns with four, and clocks up to 200 MHz captured whole on every input. It samples and streams, with no trigger |
 | **Two logic voltages in one capture** | A separate threshold for each pod, set from 0.3 V to 3 V |
 | **A trigger in the FPGA** | Edges, levels, pulses by their length and levels that have lasted, up to four stages in turn, with a trigger input and a trigger output on a header |
 | **Glitch filter and capture clock** | A filter for each channel up to 1.25 µs, and sampling on the circuit's own clock up to 50 MHz |
@@ -109,13 +110,13 @@ The [datasheet](docs/datasheet.pdf) has the full tables, the pins, the dimension
 | Item | Value |
 |---|---|
 | Channels | 16, in two keyed 2 × 8 pods. Every even pin is a ground |
-| Sample rate | 200 MS/s, or 200 MS/s divided by a whole number |
-| Fastest signal | Clocks up to 85 MHz, pulses down to 6 ns |
+| Sample rate | 200 MS/s on 16 channels, or 200 MS/s divided by a whole number. With the fast FPGA design: 375 MS/s on 8 channels (a pod), 750 MS/s on 4 |
+| Fastest signal | Clocks up to 85 MHz and pulses down to 6 ns at 200 MS/s; clocks up to 200 MHz and pulses down to 2.5 ns at 750 MS/s |
 | Logic levels | 1.2 to 5 V by design. Captured so far: 3.3 V and 5 V logic |
 | Thresholds | 0.3 to 3.0 V in 0.75 mV steps, one for each pod |
 | Inputs | 1 MΩ and 10 pF to ground, designed for ±25 V |
 | Streaming, run-length format | 16 channels at 200 MS/s, for signals that change in up to 96 million samples a second |
-| Streaming, raw format | 16 channels at 100 MS/s, any signal. At 200 MS/s, 892,928 samples |
+| Streaming, raw format | 16 channels at 100 MS/s, any signal. At 200 MS/s, 892,928 samples. With the fast design, any signal: 4 channels at 750 MS/s, 8 at 375 or 16 at 187.5 |
 | Before the trigger | The newest 8184 words: 16,368 samples in the raw format, far more on quiet signals |
 | Trigger header | TRIG IN, and TRIG OUT 75 to 80 ns after the trigger sample |
 | Host link | USB 3 at 5 Gbit/s. USB 2.0 works and carries a ninth as much |

@@ -274,3 +274,63 @@ Measured on one board with a Mac: 96 million words a second, a 48 MHz clock on o
 capture at 200 MS/s holds up to 892,928 samples. A capture clock of 50 MHz with a sample at both of its edges is
 100 million samples a second: in the raw format that is 50 million words a second and runs on, in the run-length
 format every sample is a word and it overflows like the others.
+
+## The fast design
+
+A second design for the FPGA, `gateware/fast_top.v`: 4 inputs at 750 MS/s, 8 at 375 MS/s or all 16 at
+187.5 MS/s, with no trigger, glitch filter, capture clock or Pi line. The firmware and the USB requests are the
+same; only the bitstream sent with `B4` differs (`software/logicboole/data/gateware-fast.bin`), and the FPGA may
+be loaded with one design while it runs the other. A program tells the two apart by register 02.
+`software/logicboole/board.py` (`use()`, `capture_fast()`) and `fast.py` do what is described here.
+
+**Registers.** Those that both designs have are at the same addresses.
+
+| Register | | |
+|---|---|---|
+| 00 to 03 | R | `4C 42 46`, and the design's version, 01 |
+| 04 | RW | Bit 0: the format, 0 raw, 1 run-length. Bit 1: the test pattern in place of the inputs. Bits 7:4: how far the test pattern is shifted |
+| 05 | R | The status, as the standard design's. Bit 0: both PLLs have locked |
+| 06, 07 | R | The inputs now: pod A (bit 0 is A0), pod B |
+| 08 | RW | The mode. Bits 1:0: 0 all 16 inputs, 1 eight, 2 four. Bits 3:2: which. Eight: 0 pod A, 1 pod B. Four: 0 A0 to A3, 1 A4 to A7, 2 B0 to B3, 3 B4 to B7. Bit 4: the four samples of a frame in the opposite order (a check, leave it 0) |
+| 0C to 0F | RW | The thresholds, as the standard design's |
+| 10 to 14 | RW | The frame limit, 40 bits. 0: none |
+| 18 to 1C | R | Frames taken in this capture, 40 bits |
+| 20, 21 | RW | Words in one FX3 buffer |
+| 22, 23 | R | The most words the FIFO has held in this capture |
+| 24 to 29 | R | Words written to the FX3 in this capture, 48 bits |
+| 2A | R | Bit 0: the rest was thrown away after RUN fell. Bit 1: FLAGA |
+| 2B | R | 13: the FIFO holds 2^13 words |
+| 2C, 2D | R | 750: the samples a second with four inputs, in millions, 16 bits |
+| 2E, 2F | R | The pins this design does not use, as they are now. Bits 8:0: the Pi's lines in the order of the standard design's register 2E. Bit 12: INIT_B. 13: CTL5. 14: CTL8. 15: TRIG IN |
+
+Registers 04, 08, 10 to 14 and 20, 21 are taken as RUN rises. A capture goes as the standard design's: write
+them and read them back, `C0`, `C3`, `C2`, RUN high with `C4`, read the endpoint until the status says done,
+RUN low, `C5`.
+
+**Frames.** The design takes the inputs at every rising edge of a 750 MHz clock and works in a clock of a
+quarter of that, 187.5 MHz. In each cycle of the slower clock it keeps 16 bits, a frame, 187.5 million a second:
+
+| Mode | A frame's 16 bits | Samples a second |
+|---|---|---|
+| 4 inputs | Four samples of 4 bits: bits 3:0 the earliest, then 7:4, 11:8, and 15:12 the latest | 750 million |
+| 8 inputs | Two samples of 8 bits, every second of the four: bits 7:0 the earlier, 15:8 the later | 375 million |
+| 16 inputs | One sample, every fourth: bits 7:0 pod A, 15:8 pod B | 187.5 million |
+
+Within a sample the inputs are in the order of their numbers, the lowest in the lowest bit, and 1 means above
+the pod's threshold. The first frame is taken as the capture starts, and sample n is at n / sample rate.
+
+**The stream** is the standard design's with a frame in place of a sample.
+
+- **Raw.** Bits 15:0 of a word are a frame, bits 31:16 the next one. Read as bytes, low byte first, the stream
+  is then the samples in order: a sample is the next 4 bits (the low half of a byte first), the next byte, or
+  the next two bytes. If the capture has an odd number of frames, the last word's upper half repeats the last
+  frame: use "frames taken" to cut it off. 93.75 million words a second, whatever the inputs do.
+- **Run-length.** Bits 15:0 are a frame, bits 31:16 how many more frames were equal to it (0 to 65535). A word
+  is sent when a frame differs from the one before, and one every 65536 frames while none does. So an input
+  that changes makes one or two words per change, and inputs that do not change make almost none; a signal
+  that changes in every 5.33 ns makes 187.5 million words a second, which overflows.
+
+The test pattern (register 04 bit 1) is a counter of the frames: frame t is (t >> shift) & 0xFFFF.
+`logicboole selftest --fast` captures it with each choice of inputs and compares every word. Overflow is as in
+the standard design: sampling stops, the words already taken arrive, and the capture is whole up to its last
+frame.

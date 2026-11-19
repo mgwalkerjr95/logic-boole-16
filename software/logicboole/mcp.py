@@ -11,7 +11,8 @@ on a line.  The agent is given these tools:
     board_info       what is on USB and the board's settings, with nothing changed
     set_thresholds   the two pods' thresholds
     read_inputs      the 16 inputs as they are now
-    capture          one capture, with a trigger if wanted, saved to a file
+    capture          one capture, with a trigger if wanted, saved to a file; or with the fast design (fast.py),
+                     4 inputs at 750 MS/s, a pod at 375 or all 16 at 187.5, with no trigger
     measure          periods, frequencies, pulse lengths and changes read off a saved capture
     decode           what a protocol decoder finds in a saved capture (sigrok's decoders, through sigrok-cli)
     list_decoders    the decoders there are, or what one of them takes
@@ -34,9 +35,9 @@ import tempfile
 import threading
 import time
 
-from . import __version__, board as B, decode as D, trigger as T, usb
+from . import __version__, board as B, decode as D, fast as F, trigger as T, usb
 from .capture import CHANNELS, Capture
-from .selftest import selftest
+from .selftest import selftest, selftest_fast
 
 MODERN = ("2026-07-28",)                    # revisions with no "initialize": each request names its own
 LEGACY = ("2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05")
@@ -46,7 +47,9 @@ ENDINGS = ("lb16", "sr", "vcd", "csv")
 MOST = (1 << 32) - 1                        # samples in an .lb16 file
 INSTRUCTIONS = (
     "Logic Boole 16 is a 16-channel logic analyzer on USB.  Its inputs are A0 ... A7 (pod A) and B0 ... B7 (pod "
-    "B); it samples at up to 200 MS/s (a sample every 5 ns).  Each pod has one threshold: set it to about half "
+    "B); it samples all 16 at up to 200 MS/s (a sample every 5 ns), and with `fast` four of them at 750 MS/s "
+    "(1.33 ns), a pod at 375 MS/s or all 16 at 187.5 MS/s, with no trigger: for clocks above 85 MHz, up to 200 "
+    "MHz, or timing finer than 5 ns.  Each pod has one threshold: set it to about half "
     "the logic voltage of the signals on that pod (1.65 V for 3.3 V logic, 0.9 V for 1.8 V).  `capture` takes a "
     "capture and saves it; its answer names the file, and `measure` and `decode` read that file.  Before using "
     "a capture look at `ok`, and at `overflow`, `stopped` and `triggered` if they are there.  An input with "
@@ -106,9 +109,10 @@ TOOLS = [
          "while a level holds; \"A0=1 for 10us\" a level has lasted that long; \"A0=0 pulse 100ns..1us\" a low "
          "pulse of that length has ended (\"..50ns\": at most, \"1us..\": at least); \"in=r\" the TRIG IN pin; "
          "up to four in turn: \"B7=f then B0=r\".",
-         number("rate", "Samples a second: 1e6 if not given, 200e6 at the most.  The board takes the nearest "
-                        "of 200e6 / 1, / 2, / 3 ... and the answer says which"),
-         number("seconds", "How long: 1 if not given.  With a trigger, how long from the trigger on"),
+         number("rate", "Samples a second: 1e6 if not given, 200e6 at the most (for more, `fast`).  The board "
+                        "takes the nearest of 200e6 / 1, / 2, / 3 ... and the answer says which"),
+         number("seconds", "How long: 1 if not given (0.01 with `fast`).  With a trigger, how long from the "
+                           "trigger on"),
          whole("samples", "How many samples, in place of seconds"),
          number("a", "Pod A's threshold in volts, if it is to change"),
          number("b", "Pod B's threshold in volts, if it is to change"),
@@ -128,6 +132,13 @@ TOOLS = [
                     "on A0, SCL on A1), \"uart\" (TXD on A2, RXD on A3), \"spi\" (MOSI A4, MISO A5, SCLK A6, CE0 "
                     "A7, CE1 B0), \"all\", or single lines such as \"scl,gpio14\".  Each line's solder jumper on "
                     "the board has to be closed: an open one reads low.  3.3 V logic, no threshold"),
+         text("fast", "Fewer inputs, faster, with the board's second FPGA design, in place of `rate`: \"A0-A3\", "
+                      "\"A4-A7\", \"B0-B3\" or \"B4-B7\" at 750 MS/s (a sample every 1.33 ns), \"A\" or \"B\" (a "
+                      "pod) at 375 MS/s, \"all\" at 187.5 MS/s.  For clocks above 85 MHz (up to 200 MHz, with the "
+                      "threshold at half the logic voltage) and timing finer than 5 ns.  It takes samples and sends "
+                      "them: no trigger, glitch filter, capture clock or Pi lines, and the capture starts at once.  "
+                      "Give raw=true for signals faster than about 15 MHz.  The inputs not taken read low and are "
+                      "listed in `not_taken`.  The next capture without it loads the standard design again"),
          ("raw", {"type": "boolean", "description": "Have every sample sent, not only the changes: for signals "
                                                      "that change at nearly every sample"}),
          texts("save_as", "Full paths of more files to write the capture to, for other programs: .sr (PulseView, "
@@ -168,7 +179,9 @@ TOOLS = [
          "Checks the path from the FPGA to the computer with nothing connected to the probes: the FPGA sends a "
          "known pattern in place of the inputs, from 1 MS/s to 200 MS/s, and every word that arrives is "
          "compared.  Its captures run for a little over 20 seconds in all: allow a minute.  The answer says what "
-         "passed."),
+         "passed.",
+         ("fast", {"type": "boolean", "description": "Check the fast design instead (`capture` with `fast`): its "
+                                                      "test pattern with each choice of inputs, in both formats"})),
 ]
 BY_NAME = {t["name"]: t for t in TOOLS}
 KINDS = {"string": (lambda v: isinstance(v, str), "text"),
@@ -269,8 +282,17 @@ class Tools:
         return {"inputs": {c: v >> i & 1 for i, c in enumerate(CHANNELS)},
                 "threshold_a": round(a, 3), "threshold_b": round(b, 3)}
 
-    def capture(self, asked, rate=1e6, seconds=None, samples=None, a=None, b=None, trigger=None, before=None,
-                samples_before=None, timeout=None, clock=None, glitch=None, pi=None, raw=False, save_as=()):
+    def capture(self, asked, rate=None, seconds=None, samples=None, a=None, b=None, trigger=None, before=None,
+                samples_before=None, timeout=None, clock=None, glitch=None, pi=None, fast=None, raw=False,
+                save_as=()):
+        if fast is not None:                # the fast design: the inputs, the length and the format only
+            given = [name for name, value in (("rate", rate), ("trigger", trigger), ("before", before),
+                                              ("samples_before", samples_before), ("timeout", timeout),
+                                              ("clock", clock), ("glitch", glitch), ("pi", pi)) if value is not None]
+            if given:
+                raise ValueError("fast goes without %s: the fast design takes samples and sends them, and its rate "
+                                 "is set by how many inputs it takes." % " and ".join(given))
+            mode = F.mode_of(fast)
         if seconds is not None and samples is not None:
             raise ValueError("Give seconds or samples, not both.")
         if clock and samples is None:
@@ -286,9 +308,9 @@ class Tools:
         for path in save_as:
             if path.rsplit(".", 1)[-1].lower() not in ENDINGS:
                 raise ValueError("%s: a capture is saved as .lb16, .sr, .vcd or .csv." % path)
-        rate = B.nearest_rate(rate)[1]
+        rate = mode.rate(F.FASTEST) if fast is not None else B.nearest_rate(1e6 if rate is None else rate)[1]
         if samples is None:
-            seconds = 1.0 if seconds is None else seconds
+            seconds = (0.01 if fast is not None else 1.0) if seconds is None else seconds
         kept = (samples or round(seconds * rate)) + (round(before * rate) if before else samples_before or 0)
         if kept > MOST:
             raise ValueError("A capture here has %d samples at the most: this one would have %d.  A lower rate "
@@ -303,11 +325,15 @@ class Tools:
                 asked.progress(min(part, 1.0), "capturing")
 
         with self.board() as board:
-            cap = board.capture(rate=rate, seconds=seconds or 1.0, samples=samples, fmt="raw" if raw else "rle",
-                                a=a, b=b, trigger=trigger, before=before, samples_before=samples_before,
-                                timeout=timeout, clock=clock,
-                                glitch=T.parse_filter(glitch) if glitch else None, pi=pi, progress=progress,
-                                cancel=asked.cancelled)
+            if fast is not None:
+                cap = board.capture_fast(mode, seconds=seconds or 0.01, samples=samples, fmt="raw" if raw else "rle",
+                                         a=a, b=b, progress=progress, cancel=asked.cancelled)
+            else:
+                cap = board.capture(rate=rate, seconds=seconds or 1.0, samples=samples, fmt="raw" if raw else "rle",
+                                    a=a, b=b, trigger=trigger, before=before, samples_before=samples_before,
+                                    timeout=timeout, clock=clock,
+                                    glitch=T.parse_filter(glitch) if glitch else None, pi=pi,
+                                    progress=progress, cancel=asked.cancelled)
         if asked.cancelled():               # nobody waits for this capture: no file is left behind
             raise ValueError("The request was cancelled.")
         os.makedirs(self.folder, exist_ok=True)
@@ -345,8 +371,13 @@ class Tools:
             out["glitch_ns"] = {c: ns for c, ns in zip(CHANNELS, cap.info["glitch_ns"]) if ns}
         if cap.info.get("pi"):
             out["pi"] = cap.info["pi"]
+        taken = CHANNELS
+        if cap.info.get("fast"):
+            taken = cap.info["inputs"]
+            out["fast"] = cap.info["fast"]
+            out["not_taken"] = [c for c in CHANNELS if c not in taken]
         out["usb"] = cap.info.get("usb")
-        summary = cap.summary()
+        summary = [c for c in cap.summary() if c["channel"] in taken]
         out["changing"] = {c["channel"]: {"changes": c["changes"], "first": c["first"], "starts": c["starts"]}
                            for c in summary if c["changes"]}
         out["steady_high"] = [c["channel"] for c in summary if not c["changes"] and c["starts"]]
@@ -381,10 +412,10 @@ class Tools:
             found["documentation"] = found["documentation"][:1500] + " ..."
         return found
 
-    def self_test(self, asked):
+    def self_test(self, asked, fast=False):
         lines = []
         with self.board() as board:
-            passed = selftest(board, log=lines.append, scale=0.02 if self.fake else 1.0)
+            passed = (selftest_fast if fast else selftest)(board, log=lines.append, scale=0.02 if self.fake else 1.0)
         return {"passed": passed, "captures": lines}
 
 

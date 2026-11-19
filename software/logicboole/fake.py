@@ -10,6 +10,9 @@ the code that checks a capture shares nothing with this.  The trigger and the ca
 the TRIG IN pin never changes, and the glitch filter's settings are kept but filter nothing (the stand-in's signals
 have no pulse that short).  The Raspberry Pi's lines read low, as on a board whose solder jumpers are open.
 
+It takes the fast design too (fast.py): loaded with FAST_BITS in place of a bitstream, its registers and its
+stream are that design's, with the same signals on A1 and A0 taken 750 million times a second.
+
     logicboole --fake            the app with the stand-in
     logicboole --fake capture x.sr
 """
@@ -19,6 +22,7 @@ import time
 from array import array
 
 from . import board as B
+from . import fast as F
 from . import trigger as T
 from . import usb
 
@@ -26,6 +30,9 @@ FRAME, QUARTER = 0.02, 2.5e-6               # seconds: a group of I2C messages t
 FIFO_BITS = 13                              # the FPGA's FIFO holds 2^13 words
 WRITABLE = (set((4, 8, 9, 10, 12, 13, 14, 15, 16, 17, 18, 19, 20, 0x20, 0x21, 0x2E, 0x2F, 0x30, 0x31, 0x32, 0x33))
             | set(range(0x38, 0x3C)) | set(range(0x40, 0x90)))
+WRITABLE_FAST = set((4, 8, 12, 13, 14, 15, 16, 17, 18, 19, 20, 0x20, 0x21))        # the fast design's
+# what the stand-in takes for the fast design's bitstream: the word every bitstream has, and a name
+FAST_BITS = b"\xFF" * 16 + b"\xAA\x99\x55\x66" + b"the fast design, for the stand-in board"
 
 
 def i2c_frame(n):
@@ -162,10 +169,12 @@ IMAGE = _image()
 
 class FakeBus:
     image = IMAGE                           # what connect() loads into it in place of the board's firmware
+    fast_gateware = FAST_BITS               # and what Board.use("fast") loads into its FPGA
 
     """Everything "on USB".  stage: "none" (no board), "boot" (plugged in, waiting) or "firmware".
     instant: a capture takes no time, for the tests.  overflow_at: the FPGA overflows at that sample (counted
-    from the trigger sample in a capture with a trigger: while it waits, the FPGA cannot overflow).
+    from the trigger sample in a capture with a trigger: while it waits, the FPGA cannot overflow; with the fast
+    design: at that frame).
     serial: the serial number the firmware gives on USB (None: a chip that gives none).
     link: 3 for a USB link of 5 Gbit/s, 2 for one of 480 Mbit/s (set it after making the bus).
     Faults, for the tests: drop_word and flip_word are the numbers of a word that is lost on the way, or arrives
@@ -178,6 +187,7 @@ class FakeBus:
         self.drop_word = self.flip_word = None
         self.memory = {}
         self.fpga = False                   # configured with this project's design
+        self.design = "standard"            # which of the two: "standard" or "fast"
         self.reg = bytearray(0x90)
         self.requests = []                  # every request made, for the tests
         self._start_firmware()
@@ -229,6 +239,17 @@ class FakeBus:
     def registers(self):
         self.advance()
         r = self.reg
+        if self.design == "fast":           # frames where the standard design has samples
+            r[0:4] = F.ID + b"\x01"
+            r[5] = self._fpga_status()
+            r[6:8] = (3).to_bytes(2, "little")
+            r[0x18:0x1D] = self.taken.to_bytes(5, "little")
+            r[0x22:0x24] = (64).to_bytes(2, "little")
+            r[0x24:0x2A] = self.sent.to_bytes(6, "little")
+            r[0x2A], r[0x2B] = 0, FIFO_BITS
+            r[0x2C:0x2E] = int(F.FASTEST / 1e6).to_bytes(2, "little")
+            r[0x2E:0x30] = (0x1000).to_bytes(2, "little")       # of the pins it does not use, INIT_B is high
+            return bytes(r)
         r[0:4] = b"\x4C\x42\x16\x05"
         r[5] = self._fpga_status()
         r[0x2F] &= 1
@@ -252,6 +273,7 @@ class FakeBus:
         elif code == 0xB5:
             if b"\xAA\x99\x55\x66" in self.cfg["data"][:256]:
                 self.fpga = True
+                self.design = "fast" if bytes(self.cfg["data"]) == FAST_BITS else "standard"
                 self.cfg["flags"] |= B.CFG_DONE | 32
                 self.reg = bytearray(0x90)
                 self.reg[0x0C:0x10] = struct.pack("<HH", 2048, 2048)
@@ -280,7 +302,7 @@ class FakeBus:
             if not self.fpga:
                 return -9
             for i, v in enumerate(data):
-                if value + i in WRITABLE:
+                if value + i in (WRITABLE_FAST if self.design == "fast" else WRITABLE):
                     self.reg[value + i] = v
         else:
             return -9
@@ -303,12 +325,16 @@ class FakeBus:
             r = self.reg
             self._idle()
             self.control = r[4]
-            self.rate = B.FASTEST / (int.from_bytes(r[8:11], "little") + 1)
             self.limit = int.from_bytes(r[0x10:0x15], "little")
-            self.clock = r[0x30]
-            self.pi = int.from_bytes(r[0x2E:0x30], "little") & 0x1FF
-            self.ring = min(int.from_bytes(r[0x32:0x34], "little"), (1 << FIFO_BITS) - 8)
-            for k in range(r[0x31] if r[0x31] <= T.STAGES else 0):
+            self.fast = self.design == "fast" and F.BY_REGISTER.get(r[8] & 15, F.MODES["all"])
+            if self.fast:                   # everything is counted in frames: 187.5 million a second
+                self.rate, self.clock, self.pi, self.ring = F.FASTEST / 4, 0, 0, 0
+            else:
+                self.rate = B.FASTEST / (int.from_bytes(r[8:11], "little") + 1)
+                self.clock = r[0x30]
+                self.pi = int.from_bytes(r[0x2E:0x30], "little") & 0x1FF
+                self.ring = min(int.from_bytes(r[0x32:0x34], "little"), (1 << FIFO_BITS) - 8)
+            for k in range(r[0x31] if r[0x31] <= T.STAGES and not self.fast else 0):
                 mask, value, rise, fall, least, most = struct.unpack_from("<HHHHII", r, 0x40 + 16 * k)
                 self.stages.append({"kind": r[0x38 + k] & 3, "mask": mask, "value": value, "rise": rise,
                                     "fall": fall, "min": least, "max": most, "len": 0, "fresh": False})
@@ -328,6 +354,9 @@ class FakeBus:
             if test:                        # the test pattern is made a run at a time, which is slow: the stand-in
                 due = min(due, self.pos + (200000 << shift))       # falls behind rather than stall
                 return pattern_runs(self.pos, due, shift)
+            if self.fast:                   # the probes' samples of these frames, made into frames
+                per = self.fast.per
+                return F.frame_runs(self._probes(self.pos * per, due * per, self.rate * per), self.fast)
             return self._probes(self.pos, due, self.rate)
         return self._clocked(self.fine + (1 << 22) if self.instant else int(elapsed * B.FASTEST), test, shift)
 
