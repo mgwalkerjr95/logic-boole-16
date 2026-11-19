@@ -243,6 +243,11 @@ nothing else, so `--fast` goes with `-t`, `-n`, `-a`, `-b`, `--raw` and `--test`
 length. The first capture with `--fast` loads the design, and the next capture without it loads the standard
 design again; the thresholds stay as they were. The inputs that are not taken read low in the capture.
 
+A busy signal at these rates makes data faster than a computer can hold it as samples, so a fast capture takes
+data up to a 32nd of the computer's memory and changes up to an 8th of it, and ends early there, whole up to its
+last sample, saying it had grown too large. On a Raspberry Pi with 8 GB that is 0.7 s of `--raw`, and about
+0.15 s of a signal that changes in nearly every sample. Captures of milliseconds, as below, are far from it.
+
     logicboole capture --fast A0-A3 -t 10ms fast.lb16     # A0 to A3, 750 MS/s
     logicboole capture --fast B -t 50ms pod-b.sr          # pod B, 375 MS/s
 

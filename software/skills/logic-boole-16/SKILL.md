@@ -104,6 +104,9 @@ and sends them, nothing more: it goes without `--rate`, `--trigger`, `--before`,
 for signals faster than about 15 MHz: the run-length format makes more data than raw on those and overflows.
 At 200 MHz the threshold has to sit at half the logic voltage, or the board loses periods. The next capture
 without `--fast` loads the standard design again, by itself, and the thresholds stay as set.
+Keep fast captures to milliseconds: a long one of a busy signal ends early at the software's memory limit
+("stopped": "size", a 32nd of the computer's memory in data, an 8th in changes), and on a Raspberry Pi turning
+it into samples takes minutes.
 
 In the answer `info.fast` names the choice and `info.inputs` the inputs taken. The other inputs still appear in
 `channels`, reading 0 with no changes: they were not sampled, so say nothing about them.

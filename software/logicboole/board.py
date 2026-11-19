@@ -74,6 +74,14 @@ WAITING = ("macOS has not let the board connect yet.  If it asks \"Allow accesso
            "this waits 20 seconds more.")
 
 
+def memory():
+    """This computer's memory in bytes, or 8 GB if the system does not say."""
+    try:
+        return os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
+    except (AttributeError, ValueError, OSError):
+        return 8 << 30
+
+
 def no_access():
     """Why a board that the system lists cannot be opened: what to do about it differs between the systems."""
     return HELD_BACK if sys.platform == "darwin" else NO_ACCESS
@@ -797,6 +805,10 @@ class Board:
         keep        False, with test: the words are checked but not turned into samples, and the Capture holds one
                     run of the right length.  The test pattern changes in nearly every sample, so two seconds of
                     it at 750 MS/s are 1.5 billion runs (15 GB): the self-test passes False
+        A busy signal at these rates makes data faster than the computer can hold it as samples, so a capture
+        that keeps its samples takes words up to a 32nd of the computer's memory (256 MB on an 8 GB Raspberry Pi:
+        0.7 s of the raw format), and changes up to an 8th of it.  A capture that reaches either ends early,
+        whole up to its last sample, with `stopped` "size".
 
         There is no trigger, glitch filter, capture clock or Pi line here.  Look at the capture's `problems` (or
         `ok`) and at `overflow`: an overflowed capture is shorter than asked for, but whole up to its last sample.
@@ -806,6 +818,11 @@ class Board:
         mode = F.mode_of(inputs)
         if fmt not in ("rle", "raw"):
             raise BoardError('The format is "rle" or "raw".')
+        runs_limit = None
+        if test is None or keep:            # the samples will be made: keep within the computer's memory
+            ram = memory()
+            max_bytes = min(max_bytes, max(ram // 32, 16 << 20))
+            runs_limit = max(ram // 80, 1 << 20)
         if test is not None and not 0 <= test <= 15:
             raise BoardError("The test pattern's shift is 0 ... 15.")
         if not self.status()["pins"] >> DONE & 1:
@@ -932,7 +949,9 @@ class Board:
         if test is not None and not keep:
             values, lengths = (array("H", [0]), array("Q", [n])) if n else (array("H"), array("Q"))
         else:
-            values, lengths = F.sample_runs(*W.runs_of(data, fmt, held), mode, n)
+            values, lengths = F.sample_runs(*W.runs_of(data, fmt, held), mode, n, limit=runs_limit)
+            if runs_limit is not None and len(values) >= runs_limit:
+                why, early = "size", True   # cut where the changes reached the limit
         info = {"time": started, "format": fmt, "test": test, "words": count, "read_seconds": round(t1 - t0, 3),
                 "usb": LINK.get(s["speed"], "?"), "fifo_max": r["fifo_max"], "fifo_size": 1 << r["fifo_bits"],
                 "samples_asked": samples, "link_errors": link, "fast": mode.name, "inputs": mode.channels,

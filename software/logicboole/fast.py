@@ -64,14 +64,17 @@ def mode_of(text):
     return MODES[name]
 
 
-def sample_runs(frames, counts, mode, samples=None):
+def sample_runs(frames, counts, mode, samples=None, limit=None):
     """Runs of frames (frames[i] came counts[i] times in a row) as runs of samples: (values, lengths), a value
     being all 16 inputs with the mode's inputs in their own places and the others low.  samples cuts the result to
-    that many."""
+    that many.  limit: stop once there are about that many runs (10 bytes each), so that a busy signal cannot
+    fill the computer's memory; the result is then whole up to where it stops, and len(values) >= limit says so."""
     per, bits, shift, mask, same = mode.per, mode.bits, mode.shift, mode.mask, mode.same
     values, lengths = array("H"), array("Q")
     last = None
     for f, n in zip(frames, counts):
+        if limit is not None and len(values) >= limit:
+            break
         first = f & mask
         if f == first * same:               # every sample of the frame alike: one run, however many frames
             v = first << shift
@@ -83,6 +86,8 @@ def sample_runs(frames, counts, mode, samples=None):
                 last = v
             continue
         parts = [(f >> (bits * t) & mask) << shift for t in range(per)]
+        if limit is not None:
+            n = min(n, (limit - len(values)) // per + 1)
         for _ in range(n):
             for v in parts:
                 if v == last:

@@ -1645,6 +1645,32 @@ class TheFastDesign(unittest.TestCase):
         values, lengths = F.sample_runs(array("H", [7, 9]), array("Q", [4, 1]), F.MODES["all"], samples=4)
         self.assertEqual((list(values), list(lengths)), ([7], [4]))
 
+    def test_a_limit_on_the_runs(self):
+        # A frame whose four samples differ, 1000 times: 4000 runs with no limit.  With a limit of 100 the result
+        # stops at about 100 runs and is right up to there
+        frames, counts = array("H", [0x1234]), array("Q", [1000])
+        full = F.sample_runs(frames, counts, F.MODES["A0-A3"])
+        values, lengths = F.sample_runs(frames, counts, F.MODES["A0-A3"], limit=100)
+        self.assertEqual(len(full[0]), 4000)
+        self.assertTrue(100 <= len(values) < 108)
+        self.assertEqual(list(values), list(full[0][:len(values)]))
+        # frames that are alike throughout make one run however long, so the limit is not reached
+        values, lengths = F.sample_runs(array("H", [0x1111, 0x2222]), array("Q", [10 ** 9, 5]), F.MODES["A0-A3"],
+                                        limit=100)
+        self.assertEqual((list(values), list(lengths)), ([1, 2], [4 * 10 ** 9, 20]))
+
+    def test_a_fast_capture_stays_within_memory(self):
+        # On a computer with 1 GB, the busy test pattern kept as samples stops at 1 GB / 80 = 13.4 million runs:
+        # an early end, "size", and whole up to there.  The self-test's way (keep=False) is not limited
+        bus = self.bus()
+        with unittest.mock.patch.object(B, "memory", lambda: 1 << 30), B.connect(backend=bus) as board:
+            cap = board.capture_fast("A0-A3", seconds=0.02, fmt="raw", test=0)
+            self.assertEqual((cap.ok, cap.stopped), (True, "size"))
+            self.assertTrue((1 << 30) // 80 <= len(cap.values) < (1 << 30) // 80 + 8)
+            self.assertTrue(cap.samples < 0.02 * 750e6)
+            cap = board.capture_fast("A0-A3", seconds=0.02, fmt="raw", test=0, keep=False)
+            self.assertEqual((cap.ok, cap.stopped, cap.samples), (True, None, 15000000))
+
     def test_samples_to_frames_and_back(self):
         rng = random.Random(16)
         for mode in F.MODES.values():
