@@ -11,7 +11,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Logic Boole 16 (board revision C) preliminary datasheet, rev E</title>
+<title>Logic Boole 16 (board revision C) preliminary datasheet, rev F</title>
 <meta name="author" content="Michael Walker">
 <link rel="stylesheet" href="datasheet/fonts/fonts.css">
 <style>
@@ -30,7 +30,7 @@
   margin: 18mm 15mm 16mm 15mm;
   background: #ffffff;
   @top-left { content: "LOGIC BOOLE 16  ·  preliminary datasheet"; font: 700 7.2pt "Courier Prime", "Courier New", monospace; color: #46553a; vertical-align: bottom; padding-bottom: 2.5mm; }
-  @top-right { content: "Rev E  ·  2026-11-19  ·  board revision C"; font: 400 7.2pt "Courier Prime", "Courier New", monospace; color: #4a4d40; vertical-align: bottom; padding-bottom: 2.5mm; }
+  @top-right { content: "Rev F  ·  2026-11-20  ·  board revision C"; font: 400 7.2pt "Courier Prime", "Courier New", monospace; color: #4a4d40; vertical-align: bottom; padding-bottom: 2.5mm; }
   @bottom-left { content: "© 2026 Michael Walker. Open hardware, CERN-OHL-S v2. Preliminary: subject to change."; font: 400 7pt "Archivo", Arial, sans-serif; color: #4a4d40; vertical-align: top; padding-top: 3mm; }
   @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 700 7.2pt "Courier Prime", "Courier New", monospace; color: #46553a; vertical-align: top; padding-top: 3mm; }
 }
@@ -201,7 +201,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
     </div>
     <p class="sub">Sixteen channels at 200&nbsp;MS/s, or four at 750&nbsp;MS/s, over USB&nbsp;3, through 1&nbsp;MΩ inputs for 1.2 to 5&nbsp;V logic. It runs from one USB-C cable on a computer, or mounted on a Raspberry Pi 4 or 5 as a HAT+. Open source: the board, the FPGA design, the firmware and the software.</p>
   </div>
-  <div class="rev"><span class="flag">PRELIMINARY</span><br>Datasheet <b>rev E</b><br>2026-11-19<br>Board <b>revision C</b></div>
+  <div class="rev"><span class="flag">PRELIMINARY</span><br>Datasheet <b>rev F</b><br>2026-11-20<br>Board <b>revision C</b></div>
 </header>
 
 <div class="stats">
@@ -510,7 +510,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
 <text class="dg-t" x="1130" y="656.4" text-anchor="start">Name and revision</text>
 <text class="dg-s" x="1130" y="682.4" text-anchor="start">Logic Boole 16, revision C</text>
 </svg>
-<figcaption><b>Figure 2.</b> Back, seen from behind, so left and right are swapped. The stacking header's socket is fitted here; it is not drawn.</figcaption>
+<figcaption><b>Figure 2.</b> Back, seen from behind, so left and right are swapped. The stacking header's socket is the dark strip along the top.</figcaption>
 </figure>
 <h3>Back</h3>
 <p>Only the stacking header's socket is fitted here. The rest is print.</p>
@@ -1427,7 +1427,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
   </div>
 </div>
 
-<div class="two even">
+<div class="two even" style="grid-template-columns: 1fr 1.7fr">
   <div>
     <h3>Board revisions</h3>
     <table>
@@ -1447,6 +1447,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
         <tr><td class="p">C</td><td>2026-11-18</td><td>Only the board is in the box: a USB cable, and spacers and screws for a Raspberry Pi, are the customer's to get (sections 1 and 7). A new look, in the typefaces and colors of the shop pages</td></tr>
         <tr><td class="p">D</td><td>2026-11-19</td><td>The fast FPGA design: 4 channels at 750 MS/s, 8 at 375 MS/s and 16 at 187.5 MS/s, measured on board 1 (sections 1, 2, 6, 11 and 13)</td></tr>
         <tr><td class="p">E</td><td>2026-11-19</td><td>Measured on a Pi 5; installs with pipx (sections 7 and 13)</td></tr>
+        <tr><td class="p">F</td><td>2026-11-20</td><td>New renders of the board (page 1, figures 1, 2, 4 and 5)</td></tr>
       </tbody>
     </table>
   </div>
