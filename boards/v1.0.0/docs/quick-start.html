@@ -72,7 +72,7 @@
 <div class="page">
 <header>
   <h1>Logic Boole 16 <span>quick start</span></h1>
-  <p>Revision E &middot; from the box to a first capture</p>
+  <p>Revision F &middot; from the box to a first capture</p>
 </header>
 
 <div class="two">
@@ -141,7 +141,7 @@ pipx ensurepath</pre>
     </div>
   </div>
   <p>Then open a new terminal window and install the software: <code>pipx install logicboole</code>. On Linux, the first
-    <code>logicboole check</code> prints three commands that let your user open the board: run them once.</p>
+    <code>logicboole check</code> prints a line of commands that lets your user open the board: run it once.</p>
 </div></div>
 
 <div class="step"><div class="n">2</div><div>
@@ -253,26 +253,30 @@ The board is ready.  "logicboole" opens the app.</pre>
     <tr><th style="width:30%">What you see</th><th>What to do</th></tr>
     <tr><td>"The board: not on USB."</td><td>Try another cable and port. A cable made only for charging carries no data.</td></tr>
     <tr><td>"macOS has not let it connect"</td><td>Run it again and choose Allow when macOS asks. Setting: "Allow accessories to connect".</td></tr>
-    <tr><td>"this user may not open it"</td><td>Linux: run the three commands it prints, then unplug the board and plug it in again.</td></tr>
+    <tr><td>"this user may not open it"</td><td>Linux: run the line it prints, then unplug the board and plug it in again.</td></tr>
     <tr><td>"USB: 480 Mbit/s"</td><td>The cable or the port is USB 2. The board works; fast signals need a USB 3 cable and port.</td></tr>
+    <tr><td>"Another program is capturing"</td><td>Wait for it, or end it: <code>logicboole load</code> takes the board back.</td></tr>
     <tr><td>A capture ends early: "overflow"</td><td>Too many changes for the link: lower the rate, shorten the capture, or use USB 3.</td></tr>
     <tr><td>An input stays at 0 or at 1</td><td>Check the ground lead and that pod's threshold.</td></tr>
     <tr><td>Anything else odd</td><td>Unplug the board and plug it in again: it is then as it was.</td></tr>
   </table>
+  <p><b>Help:</b> write to <a href="mailto:support@nearfieldsupply.com">support@nearfieldsupply.com</a>, or open an issue at
+    <a href="https://github.com/mgwalkerjr95/logic-boole-16/issues">github.com/mgwalkerjr95/logic-boole-16/issues</a>.</p>
 </div>
 <div class="box">
   <h2>On a Raspberry Pi 4 or 5</h2>
   <ul class="cols">
     <li>Set the board on the Pi's 40-pin header, on four M2.5 &times; 16 mm spacers held by eight M2.5 &times; 6 mm
       screws (yours to get: they are not in the box); it takes its power there. Join its USB-C socket to a blue
-      USB 3 socket of the Pi with a short USB 3 cable, for the data.</li>
+      USB 3 socket of the Pi with a short USB 3 cable, for the data. On a Pi 4 the cable's USB-C plug body must
+      be no thicker than 6.4 mm.</li>
     <li>Then steps 1 to 6 as on any Linux computer. With no screen on the Pi: <code>logicboole --host
-      0.0.0.0</code>, and open <code>http://</code>the Pi's name<code>:8016</code> elsewhere, on a network you
-      trust (the app has no password).</li>
+      0.0.0.0</code>, and open the address it prints on another computer, on a network you trust (the app has no
+      password).</li>
   </ul>
 </div>
 
-<footer><span>Logic Boole 16 quick start, revision E</span><span>&copy; 2026 Michael Walker &middot; open hardware and software: see the repository's README for the licenses</span></footer>
+<footer><span>Logic Boole 16 quick start, revision F</span><span>&copy; 2026 Michael Walker &middot; open hardware and software: see the repository's README for the licenses</span></footer>
 </div>
 
 </body>

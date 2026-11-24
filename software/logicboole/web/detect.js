@@ -3,7 +3,9 @@
 
 // Looks at a capture and says what is on each channel: steady, a clock, PWM, or part of an I2C bus, an SPI bus or
 // a serial line.  The buses are found by trying the decoders and keeping only the combinations whose framing is
-// right throughout, so a guess that is shown has decoded cleanly.
+// right throughout, so a guess that is shown has decoded cleanly.  Only the first LOOK edges of a channel are
+// looked at, so a long capture costs no more than a short one.  ../detect.py is the same for the command line:
+// a change here is made there too.
 
 import { NCH, upperBound, lowerBound } from './capture.js';
 import { decodeI2C, decodeUART, estimateBaud } from './decoders.js';
@@ -114,7 +116,6 @@ function findSPI(cap, stats, free) {
       found.push({
         type: 'spi', score: bytes, channels: [k, c, ...data],
         cfg: { clk: k, cs: c, mosi: data[0], miso: data.length > 1 ? data[1] : -1, cpol, cpha: lead > trail ? 1 : 0, bits: 8, msb: true, csActive: 0 },
-        names: { [k]: 'SPI CLK', [c]: 'SPI CS', [data[0]]: 'SPI MOSI', ...(data.length > 1 ? { [data[1]]: 'SPI MISO' } : {}) },
       });
     }
   }
@@ -132,29 +133,80 @@ function findI2C(cap, stats, free) {
       const r = decodeI2C(cap, { sda, scl }, LOOK);
       const st = r.stats;
       if (st.messages < 1 || st.errors || st.stray || st.bytes < st.messages) continue;
-      found.push({ type: 'i2c', score: st.bytes, channels: [sda, scl], cfg: { sda, scl }, names: { [sda]: 'I2C SDA', [scl]: 'I2C SCL' } });
+      // what was decoded is the whole of it when the two lines have no more edges than were looked at
+      const whole = cap.channels[sda].edges.length + cap.channels[scl].edges.length <= LOOK && st.cut === undefined;
+      found.push({ type: 'i2c', score: st.bytes, channels: [sda, scl], cfg: { sda, scl }, result: r, whole });
     }
   }
   return found;
 }
 
 // Serial: a line that rests high, whose pulses are all whole bits of one of the usual speeds, and that decodes
-// with no framing error.
+// with no framing error: as 8 data bits with no parity (8N1), else with even parity (8E1), else with odd (8O1).
+// Seven data bits with even parity (7E1) decode as 8N1, with the parity bit as the eighth: they are told apart by
+// that bit, which then always makes the number of ones even (sevenEven).
+const FORMATS = [[8, 'none'], [8, 'even'], [8, 'odd']];
+
 function findUART(cap, stats, free) {
   const found = [];
   for (let rx = 0; rx < NCH; rx++) {
     if (!free.has(rx) || stats[rx].kind !== 'data' || stats[rx].edges < 8 || stats[rx].high < 0.5) continue;
     const est = estimateBaud(cap, rx);
     if (!est || !est.standard || est.fit < 0.97) continue;
-    const cfg = { rx, baud: est.baud, bits: 8, parity: 'none', stop: 1, invert: false, msb: false };
-    const st = decodeUART(cap, cfg).stats;
-    if (st.bytes < 2 || st.framing > st.bytes * 0.02) continue;
-    found.push({ type: 'uart', score: st.bytes, channels: [rx], cfg, names: { [rx]: 'Serial' } });
+    for (const [bits, parity] of FORMATS) {
+      let cfg = { rx, baud: est.baud, bits, parity, stop: 1, invert: false, msb: false };
+      let r = decodeUART(cap, cfg, LOOK);
+      const st = r.stats;
+      if (st.bytes < 2 || st.framing > st.bytes * 0.02 || st.parity > st.bytes * 0.02) continue;
+      if (parity === 'none' && sevenEven(r.ann)) {
+        cfg = { ...cfg, bits: 7, parity: 'even' };
+        r = decodeUART(cap, cfg, LOOK);
+      }
+      const whole = cap.channels[rx].edges.length <= LOOK && r.stats.cut === undefined;
+      found.push({ type: 'uart', score: r.stats.bytes, channels: [rx], cfg, result: r, whole });
+      break;
+    }
   }
   return found;
 }
 
-// Everything found, best first, with no channel used twice.
+// Bytes decoded as 8N1 that are 7 data bits and an even parity bit: at least 16 of them without a framing error,
+// each with an even number of ones, and the top bit (the parity bit) set in some.
+function sevenEven(ann) {
+  let n = 0, high = 0;
+  for (const a of ann) {
+    if (a.err) continue;
+    let ones = 0;
+    for (let v = a.v; v; v &= v - 1) ones++;
+    if (ones & 1) return false;
+    n++;
+    if (a.v & 0x80) high++;
+  }
+  return n >= 16 && high > 0;
+}
+
+// The names auto-detect gives the channels of a bus.  A name that an earlier bus of the same result has taken gets
+// a number: SDA2, UART2.
+const NAMES = { i2c: [['sda', 'SDA'], ['scl', 'SCL']], spi: [['clk', 'SPI_CLK'], ['cs', 'SPI_CS'], ['mosi', 'SPI_MOSI'], ['miso', 'SPI_MISO']],
+  uart: [['rx', 'UART']] };
+
+function giveNames(analyzers) {
+  const given = new Set();
+  for (const f of analyzers) {
+    f.names = {};
+    for (const [role, want] of NAMES[f.type]) {
+      const ch = f.cfg[role];
+      if (!(ch >= 0)) continue;
+      let name = want;
+      for (let k = 2; given.has(name.toLowerCase()); k++) name = want + k;
+      given.add(name.toLowerCase());
+      f.names[ch] = name;
+    }
+  }
+}
+
+// Everything found, best first, with no channel used twice.  Each: { type, score, channels, cfg, names }, and for
+// I2C and serial the decoders' result on the part looked at (result), which is the whole when whole is true.
 export function detect(cap) {
   const stats = Array.from({ length: NCH }, (_, ch) => channelStats(cap, ch));
   const free = new Set(Array.from({ length: NCH }, (_, i) => i));
@@ -167,5 +219,6 @@ export function detect(cap) {
       analyzers.push(f);
     }
   }
+  giveNames(analyzers);
   return { analyzers, stats };
 }

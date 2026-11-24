@@ -75,6 +75,17 @@ def seconds(text):
     return None
 
 
+def _time(t):
+    """Seconds as text for reading: "100 ns", "2.5 us"."""
+    for unit, scale in reversed(UNITS):
+        if t >= scale or unit == "ns":
+            return "%.6g %s" % (t / scale, unit)
+
+
+def _rate(rate):
+    return "%.6g MS/s" % (rate / 1e6) if rate >= 1e6 else "%.6g kS/s" % (rate / 1e3)
+
+
 def _samples(text, rate):
     """A time, or a number of samples, as a number of samples."""
     t = seconds(text)
@@ -110,12 +121,12 @@ def parse(text, rate=None):
         while i < len(words):
             w = words[i]
             i += 1
-            if w in ("for", "pulse"):
+            if w.lower() in ("for", "pulse"):
                 if s["kind"] or i >= len(words):
                     raise TriggerError("\"%s\" is followed by one time, once in a stage: \"%s\"." % (w, part.strip()))
                 arg = words[i]
                 i += 1
-                if w == "for":
+                if w.lower() == "for":
                     s["kind"], s["min"] = 2, max(1, _samples(arg, rate))
                 else:
                     low, dots, high = arg.partition("..")
@@ -125,6 +136,10 @@ def parse(text, rate=None):
                     s["min"] = max(1, _samples(low, rate)) if low else 1
                     s["max"] = _samples(high, rate) if high else NO_LIMIT
                     if s["max"] < s["min"]:
+                        if rate and seconds(high) is not None and s["max"] < 1:
+                            raise TriggerError("A pulse of %s is shorter than one sample, which is %s at %s: give a "
+                                               "longer time, or capture faster." % (high, _time(1 / rate),
+                                                                                    _rate(rate)))
                         raise TriggerError("The pulse's longest time is shorter than its shortest: \"%s\"." % arg)
                 continue
             name, eq, what = w.partition("=")

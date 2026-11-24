@@ -22,10 +22,27 @@ LITTLE = sys.byteorder == "little"
 PERIOD = 1 << 16                            # the test pattern's blocks: this many words, or samples
 
 
+def _whole(data):
+    """The words' bytes without a part-word at the end, as a view: nothing is copied."""
+    view = memoryview(data).cast("B")
+    return view[:len(view) - len(view) % 4]
+
+
+def _numbers(data):
+    """The words' bytes as 16-bit numbers that can be read one by one: a view of them where the computer keeps
+    numbers low byte first (nothing is copied), else an array turned round."""
+    if LITTLE:
+        return _whole(data).cast("H")
+    h = array("H")
+    h.frombytes(_whole(data))
+    h.byteswap()
+    return h
+
+
 def halves(data):
     """The words' lower halves and their upper halves, as two arrays of 16-bit numbers."""
     h = array("H")
-    h.frombytes(bytes(data[:len(data) - len(data) % 4]))
+    h.frombytes(_whole(data))
     if not LITTLE:
         h.byteswap()
     return h[0::2], h[1::2]
@@ -35,18 +52,21 @@ def samples_held(data, fmt):
     """How many samples the words hold (raw: counting a repeated last sample as one)."""
     if fmt == "raw":
         return len(data) // 4 * 2
-    more = halves(data)[1]
+    more = _numbers(data)[1::2]             # the words' upper halves, read where they are
     return sum(more) + len(more)
 
 
 def runs_of(data, fmt, samples=None):
-    """The capture as runs: (values, lengths).  samples cuts it to that many (raw: drops the repeated sample)."""
+    """The capture as runs: (values, lengths).  samples cuts it to that many (raw: drops the repeated sample).
+    A run-length word is a run: its value, and its count plus one, made one at a time (10 bytes a word in all,
+    with no list of numbers on the way)."""
     if fmt == "rle":
-        low, more = halves(data)
-        lengths = array("Q", [n + 1 for n in more])
+        h = _numbers(data)
+        low = array("H", h[0::2])
+        lengths = array("Q", map((1).__add__, h[1::2]))
         return _cut(low, lengths, samples)
     h = array("H")
-    h.frombytes(bytes(data[:len(data) - len(data) % 4]))
+    h.frombytes(_whole(data))
     if not LITTLE:
         h.byteswap()
     return runs_of_samples(h, len(h) if samples is None else min(samples, len(h)))

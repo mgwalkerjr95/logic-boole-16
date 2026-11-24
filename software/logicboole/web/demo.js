@@ -163,5 +163,5 @@ export function makeDemo(sampleRate, numSamples) {
   for (let i = 1; i * 250e-6 < T; i++) for (let b = 0; b < 4; b++) L[10 + b].set(i * 250e-6, i >> b & 1);
 
   const channels = L.map(l => l.sample(sampleRate, numSamples));
-  return new Capture({ sampleRate, numSamples, channels, source: 'Demo signals' });
+  return new Capture({ sampleRate, numSamples, channels, source: 'Simulated signals' });
 }

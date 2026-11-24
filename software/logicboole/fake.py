@@ -178,7 +178,13 @@ class FakeBus:
     serial: the serial number the firmware gives on USB (None: a chip that gives none).
     link: 3 for a USB link of 5 Gbit/s, 2 for one of 480 Mbit/s (set it after making the bus).
     Faults, for the tests: drop_word and flip_word are the numbers of a word that is lost on the way, or arrives
-    with a bit changed."""
+    with a bit changed.  fail: {request: libusb's error} for requests that fail so (-7 a timeout, -9 a stall).
+    leave_after: the board leaves USB (as if unplugged) once that many bytes of a capture have arrived.
+    read_fails_after: a read fails once that many have arrived, and the board stays (as usb.Reader, nothing
+    more is passed on after it).
+    leave_running(): a capture that another program started and did not end.
+    firmware_version and versions (of the FPGA's designs): what the board says it runs, which loading the
+    firmware or a design sets to what this software comes with."""
 
     def __init__(self, stage="boot", instant=False, overflow_at=None, access=True, serial="5354414E442D494E"):
         self.stage, self.instant, self.overflow_at, self.access = stage, instant, overflow_at, access
@@ -190,6 +196,9 @@ class FakeBus:
         self.design = "standard"            # which of the two: "standard" or "fast"
         self.reg = bytearray(0x90)
         self.requests = []                  # every request made, for the tests
+        self.fail, self.leave_after, self.read_fails_after = {}, None, None
+        self.firmware_version = B.FIRMWARE_VERSION
+        self.versions = dict(B.DESIGN_VERSIONS)
         self._start_firmware()
 
     # ---- what usb.py offers ----
@@ -227,7 +236,8 @@ class FakeBus:
     def status(self):
         flags = 1 | 4 | self.interface << 3 | self.stream << 4 | self.run << 5 | self.fpga << 6
         pins = self.fpga << B.DONE | 1 << B.INIT_B
-        return struct.pack("<4s HBB HHHHHH I II IHHIH BB IHH BBBB HBB", B.MAGIC, 2, self.link, flags, 0, 0, 0, 0, 0, 0,
+        return struct.pack("<4s HBB HHHHHH I II IHHIH BB IHH BBBB HBB", B.MAGIC, self.firmware_version, self.link,
+                           flags, 0, 0, 0, 0, 0, 0,
                            int((time.monotonic() - self.t_start) / B.TICK) & 0xFFFFFFFF, pins & 0xFFFFFFFF, pins >> 32,
                            self.cfg["bytes"], self.cfg["flags"], 12, 8, 290, 0, 0, self.port_errors, 0, 0, self.kb,
                            self.count, 0, 0, 0, 3 if self.fpga else 0, self._fpga_status() if self.fpga else 0)
@@ -240,7 +250,7 @@ class FakeBus:
         self.advance()
         r = self.reg
         if self.design == "fast":           # frames where the standard design has samples
-            r[0:4] = F.ID + b"\x01"
+            r[0:4] = F.ID + bytes([self.versions["fast"]])
             r[5] = self._fpga_status()
             r[6:8] = (3).to_bytes(2, "little")
             r[0x18:0x1D] = self.taken.to_bytes(5, "little")
@@ -250,7 +260,7 @@ class FakeBus:
             r[0x2C:0x2E] = int(F.FASTEST / 1e6).to_bytes(2, "little")
             r[0x2E:0x30] = (0x1000).to_bytes(2, "little")       # of the pins it does not use, INIT_B is high
             return bytes(r)
-        r[0:4] = b"\x4C\x42\x16\x05"
+        r[0:4] = B.DESIGN_ID + bytes([self.versions["standard"]])
         r[5] = self._fpga_status()
         r[0x2F] &= 1
         r[6:8] = (3 & ~int.from_bytes(r[0x2E:0x30], "little")).to_bytes(2, "little")
@@ -274,6 +284,7 @@ class FakeBus:
             if b"\xAA\x99\x55\x66" in self.cfg["data"][:256]:
                 self.fpga = True
                 self.design = "fast" if bytes(self.cfg["data"]) == FAST_BITS else "standard"
+                self.versions[self.design] = B.DESIGN_VERSIONS[self.design]
                 self.cfg["flags"] |= B.CFG_DONE | 32
                 self.reg = bytearray(0x90)
                 self.reg[0x0C:0x10] = struct.pack("<HH", 2048, 2048)
@@ -317,6 +328,23 @@ class FakeBus:
         if code == 0xD1 and self.fpga:
             return self.registers()[value:value + n]
         return None
+
+    def leave_running(self, held=False):
+        """As if another program had started a capture and not ended it: the stream started and RUN high, with
+        the FPGA sending its test pattern (run-length, shifted by 15; the standard design at 1 MS/s), and no end.
+        held: that program still runs and has the board open (its interface 0), so no other program can take it;
+        else it has ended, and the system has let go of the interface."""
+        assert self.stage == "firmware" and self.fpga
+        r = self.reg
+        r[4], r[0x10:0x15] = 1 | 2 | 15 << 4, bytes(5)
+        if self.design == "fast":
+            r[8] = F.MODES["all"].register
+        else:
+            r[8:11], r[0x30:0x34] = (199).to_bytes(3, "little"), bytes(4)
+        self.request_out(0xC0, 0, 0, b"")
+        self.request_out(0xC2, B.BUFFER_KB, B.BUFFERS, b"")
+        self.request_out(0xC4, 1, 0, b"")
+        self.claimed = held
 
     # ---- the FPGA's sampler ----
 
@@ -470,6 +498,7 @@ class FakeBus:
 class FakeDevice:
     def __init__(self, bus, stage):
         self.bus, self.stage = bus, stage
+        self.error = None                   # libusb's error for the last request that failed (as usb.Device)
 
     def close(self):
         pass
@@ -479,6 +508,8 @@ class FakeDevice:
         bus.requests.append((request, value, index, len(data)))
         if bus.stage != self.stage:
             return -4                       # the device has gone
+        if request in bus.fail:
+            return bus.fail[request]
         if self.stage == "boot":
             if request != 0xA0:
                 return -9
@@ -487,18 +518,28 @@ class FakeDevice:
                 bus.memory[address] = bytes(data)
             else:                           # a jump: the firmware starts; the FPGA keeps what it holds
                 bus.stage = "firmware"
+                bus.firmware_version = B.FIRMWARE_VERSION
                 bus._start_firmware()
             return len(data)
         return bus.request_out(request, value, index, bytes(data))
 
     def get(self, request, value, index, n, timeout=1000):
         bus = self.bus
+        self.error = None
         if bus.stage != self.stage:
+            self.error = -4                 # the device has gone
+            return None
+        if request in bus.fail:
+            self.error = bus.fail[request]
             return None
         if self.stage == "boot":
             got = bus.memory.get(value | index << 16, b"")
-            return got if request == 0xA0 and len(got) == n else None
-        return bus.request_in(request, value, n)
+            got = got if request == 0xA0 and len(got) == n else None
+        else:
+            got = bus.request_in(request, value, n)
+        if got is None:
+            self.error = -9                 # (the firmware stalls a request it does not know)
+        return got
 
     def serial(self):
         return self.bus.serial if self.stage == "firmware" else None
@@ -560,8 +601,20 @@ class FakeReader:
             self.read += data[whole:]
             self._read_done()
 
+    def _gone(self):
+        """Whether the board has left USB: a read then fails as libusb reports it."""
+        if self.bus.stage == "firmware":
+            return False
+        if not self.failed:
+            self.failure = usb.FAILURES[5]
+        self.failed += 1
+        return True
+
     def _read_done(self):
         n = len(self.read)
+        if self._gone() or self.failed:
+            del self.read[:]
+            return
         if n:
             self.last_data = time.monotonic()
             if self.sink_error is None:
@@ -575,10 +628,16 @@ class FakeReader:
             self.short_reads += 1
         self.bytes += n
         del self.read[:]
+        if self.bus.leave_after is not None and self.bytes >= self.bus.leave_after:
+            self.bus.stage = "none"         # unplugged
+        elif self.bus.read_fails_after is not None and self.bytes >= self.bus.read_fails_after:
+            self.failed, self.failure = 1, usb.FAILURES[1]
 
     def pump(self, ms):
         if not self.bus.instant:
             time.sleep(ms / 1000)
+        if self._gone():
+            return
         self.bus.advance()
         if self.wrap_up:
             self.wrap_up = False

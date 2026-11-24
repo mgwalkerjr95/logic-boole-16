@@ -26,6 +26,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import threading
 import zipfile
 
 from .capture import CHANNELS, Capture
@@ -132,9 +133,8 @@ def about(name):
 
 def stack(words):
     """What was asked for as a list of (decoder, {name: value}): from "i2c scl=A1 sda=A0 eeprom24xx" or the same
-    as a list of words."""
-    if isinstance(words, str):
-        words = words.split()
+    as a list of words, some of which may hold more than one ("i2c scl=A1", "sda=A0": as typed in quotes)."""
+    words = (words or "").split() if isinstance(words, str) else [p for w in words for p in w.split()]
     parts = []
     for w in words:
         name, eq, value = w.partition("=")
@@ -276,6 +276,9 @@ def decode(path, words, only=None, start=None, end=None, limit=None, cancel=None
                 raise DecodeError("%s: there is no such file." % path)
             rate, samples, listed = _session(path)
             names = {n.lower(): n for n in listed}
+            # A0 ... B7 are its first 16 channels, as when the session is read for anything else (Capture.load);
+            # an id wins over a channel of another's named like it
+            names.update((c.lower(), n) for c, n in zip(CHANNELS, listed))
             session = path
         else:
             raise DecodeError("%s: decoders run on a capture saved as .lb16 or .sr." % path)
@@ -299,6 +302,19 @@ def decode(path, words, only=None, start=None, end=None, limit=None, cancel=None
                 p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=err, encoding="utf-8", errors="replace")
             except OSError as e:
                 raise DecodeError("sigrok-cli could not be run: %s" % e)
+            done, killed = threading.Event(), threading.Event()
+
+            def watch():                    # sigrok-cli may print nothing for a long while: cancel() is asked anyway
+                while not done.wait(0.2):
+                    if cancel():
+                        killed.set()
+                        try:
+                            p.kill()
+                        except OSError:
+                            pass
+                        return
+            if cancel is not None:
+                threading.Thread(target=watch, daemon=True).start()
             try:
                 for count, line in enumerate(p.stdout):
                     if cancel is not None and count % 4096 == 0 and cancel():
@@ -314,10 +330,12 @@ def decode(path, words, only=None, start=None, end=None, limit=None, cancel=None
                     if cls in wanted if wanted else not re.search(r"(^|-)bits?$", cls):
                         rows.append((a, -int(m.group(2)), m.group(3), cls, texts))
             finally:
+                done.set()
                 if stopped:
                     p.kill()
                 p.stdout.close()
                 status = p.wait()
+            stopped = stopped or killed.is_set()
         if stopped:
             raise DecodeError("The decoders were stopped.")
         if status:

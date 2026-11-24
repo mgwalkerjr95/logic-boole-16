@@ -14,28 +14,38 @@
     logicboole inputs                   the 16 inputs as they are now
     logicboole selftest                 checks the path from the FPGA to the computer with its test pattern
                                         (selftest --fast: with the fast design)
-    logicboole show FILE.lb16           what a saved capture holds
-    logicboole measure FILE.lb16 A0 ...  periods, frequencies and pulse lengths read off a saved capture
+    logicboole show FILE                what a saved capture (.lb16 or .sr) holds
+    logicboole measure FILE A0 ...      periods, frequencies and pulse lengths read off a saved capture
+    logicboole find FILE "A0=0 pulse ..50ns"     every moment in a saved capture that a trigger's text describes
+    logicboole detect FILE              what is on each channel: I2C, SPI, serial, a clock, PWM
+    logicboole plot FILE A0 A1 --from 1ms --to 2ms   a picture of a saved capture, as a PNG file
     logicboole decode FILE i2c scl=A1 sda=A0     what a protocol decoder finds in a saved capture (sigrok's
                                         decoders, through sigrok-cli; "logicboole decoders" lists them)
-    logicboole convert IN.lb16 OUT ...  a saved capture in other formats
+    logicboole convert IN OUT ...       a saved capture in other formats
     logicboole mcp                      a Model Context Protocol server, for an AI agent to use the board
+    logicboole skill --install          the skill file that tells an AI agent how to use the board
     logicboole load                     loads the firmware and the FPGA's design again (or ones you built)
     logicboole unload                   sends the board back to its boot loader
 
 A board that has just been plugged in is loaded by whichever command needs it first.  "logicboole COMMAND -h"
 lists a command's options; --fake before the command uses a stand-in for the board; --json makes info, inputs,
-threshold, capture, show, measure, decode and decoders print JSON for a program to read.
+threshold, capture, show, measure, find, detect, plot, decode and decoders print JSON for a program to read.
 """
 import argparse
 import json
 import os
 import signal
 import sys
+import time
 
-from . import __version__, board as B, decode as D, trigger as T, usb
-from .capture import CHANNELS, Capture
+from . import __version__, board as B, decode as D, fast as F, guide as G, trigger as T, usb
+from .capture import CHANNELS, LB16_SAMPLES, Capture, TooLong, parse_names, writable
 from .selftest import selftest, selftest_fast
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+SKILL = G.SKILL
+SKILLS = os.path.join("~", ".claude", "skills")    # where Claude Code looks for a user's skills
+skill_file = G.skill_file
 
 
 def number(text):
@@ -61,6 +71,28 @@ def duration(text):
         raise argparse.ArgumentTypeError("a time is in seconds: 2, 0.5, 20ms, 100us")
 
 
+def glitch(text):
+    """--glitch: what capture() takes, or what is wrong with it in argparse's way."""
+    try:
+        return T.parse_filter(text)
+    except ValueError as e:
+        raise argparse.ArgumentTypeError(str(e)) from None
+
+
+def before_text(text):
+    """--before as (seconds, None) for a time, or (None, samples) for a whole number of samples."""
+    t = T.seconds(text)
+    if t is not None:
+        return t, None
+    try:
+        n = number(text)
+    except argparse.ArgumentTypeError:
+        n = None
+    if n is None or n < 0 or n != int(n):
+        raise ValueError("--before %s: write 50ms, or a whole number of samples." % text)
+    return None, int(n)
+
+
 def rate_text(rate):
     return "%.10g MS/s" % (rate / 1e6) if rate >= 1e6 else "%.10g kS/s" % (rate / 1e3)
 
@@ -84,18 +116,23 @@ def levels(v):
     return "  ".join("%s %d" % (c, v >> i & 1) for i, c in enumerate(CHANNELS))
 
 
+def durations(text):
+    """Times separated by commas: 1ms,1.5ms,0.002."""
+    return [duration(t) for t in text.split(",") if t.strip()]
+
+
 def describe(cap):
     """Lines about what each channel did."""
-    out, quiet = [], []
-    for ch in cap.summary():
+    out, quiet, summary = [], [], cap.summary()
+    for k, ch in enumerate(summary):
         if ch["changes"]:
             out.append("  %s: %d changes, the first at %.9g s; it starts %s"
-                       % (ch["channel"], ch["changes"], ch["first"], "high" if ch["starts"] else "low"))
+                       % (cap.label(k), ch["changes"], ch["first"], "high" if ch["starts"] else "low"))
         else:
-            quiet.append(ch)
+            quiet.append(k)
     if quiet:
-        high = [ch["channel"] for ch in quiet if ch["starts"]]
-        out.append("  no change on %s (%s)" % (" ".join(ch["channel"] for ch in quiet),
+        high = [cap.label(k) for k in quiet if summary[k]["starts"]]
+        out.append("  no change on %s (%s)" % (" ".join(cap.label(k) for k in quiet),
                                               "high: " + " ".join(high) if high else "all low"))
     return out
 
@@ -140,6 +177,9 @@ def parser():
     c.add_argument("--json", action="store_true")
 
     c = command("capture", "one capture, written to each FILE (.sr .vcd .csv .lb16)")
+    c.epilog = ("The exit status is 0 for a capture as asked for, 1 if something went wrong (what is printed "
+                "says what), and 3 for a capture that was saved but is not what was asked for: it overflowed, or "
+                "--timeout passed before its trigger came (or, with --clock, before it had its samples).")
     c.add_argument("files", nargs="*", metavar="FILE")
     c.add_argument("-r", "--rate", type=number, help="samples a second: 200M, 100M, 50M, 10M, 1M (the "
                    "default), 250k ...; the board takes the nearest of 200 MS/s / 1, / 2, / 3 ...")
@@ -151,7 +191,7 @@ def parser():
     c.add_argument("--raw", action="store_true", help="have every sample sent, not only the changes: for signals "
                                                        "that change at nearly every sample.  At 200 MS/s that is "
                                                        "all the board can pass on, and such a capture is short")
-    c.add_argument("--test", type=int, nargs="?", const=8, metavar="SHIFT", help="the FPGA's test pattern in place "
+    c.add_argument("--test", nargs="?", const="8", metavar="SHIFT", help="the FPGA's test pattern in place "
                    "of the probes: a counter of the samples shifted right by SHIFT bits (8), checked word for word")
     c.add_argument("--trigger", metavar="WHAT", help="wait for this, and count the capture's length from it.  "
                    "\"B0=r\": B0 rises (f: falls, e: either).  \"A0=1 A1=0\": levels.  \"A2=f A0=1\": an edge "
@@ -167,13 +207,16 @@ def parser():
                    "edge of A0 (f: falling, e: either), the circuit's own clock up to 50 MHz, in place of one "
                    "every so many nanoseconds.  The length is then a number of samples (-n), and --rate is only "
                    "what the files give as the clock's frequency")
-    c.add_argument("--glitch", type=T.parse_filter, metavar="TIME", help="a glitch filter: \"20ns\" for every "
+    c.add_argument("--glitch", type=glitch, metavar="TIME", help="a glitch filter: \"20ns\" for every "
                    "input, or \"A0=20ns,B=1us\" for a channel and a pod (10 ns ... 1.25 us).  A change counts "
                    "once the input has held its new level for that long")
     c.add_argument("--pi", metavar="LINES", help="lines of the Raspberry Pi the board sits on, in place of probes: "
                    "\"i2c\" (SDA for A0, SCL for A1), \"uart\" (TXD for A2, RXD for A3), \"spi\" (MOSI, MISO, "
                    "SCLK, CE0 for A4 ... A7, CE1 for B0), \"all\", or single lines such as \"scl,gpio14\".  The "
                    "line's solder jumper on the board has to be closed")
+    c.add_argument("--name", action="append", metavar="CH=NAME,...", help="names for channels, saved with the "
+                   "capture: \"A0=SDA,A1=SCL\".  The app shows them, and measure, find, plot and decode take them "
+                   "in place of A0 ... B7")
     c.add_argument("--fast", metavar="INPUTS", help="the fast design: four inputs at 750 MS/s (A0-A3, A4-A7, B0-B3 "
                    "or B4-B7), a pod at 375 MS/s (A or B) or all 16 at 187.5 MS/s (all).  The FPGA is loaded with "
                    "it first, and with the standard design again by the next capture without --fast.  Goes with "
@@ -193,17 +236,52 @@ def parser():
     command("check", "the first thing to run: checks this computer and the board, and says what is missing")
 
     c = command("show", "what a saved capture holds")
-    c.add_argument("file", metavar="FILE.lb16")
+    c.add_argument("file", metavar="FILE", help="a capture saved as .lb16 or .sr")
     c.add_argument("--json", action="store_true")
 
     c = command("measure", "periods, frequencies and pulse lengths read off a saved capture")
-    c.add_argument("file", metavar="FILE.lb16")
-    c.add_argument("channels", nargs="*", metavar="CHANNEL", help="A0 ... B7; none: the channels that change")
+    c.add_argument("file", metavar="FILE", help="a capture saved as .lb16 or .sr")
+    c.add_argument("channels", nargs="*", metavar="CHANNEL", help="A0 ... B7, or the names the capture gives "
+                                                                   "them; none: the channels that change")
     c.add_argument("--from", dest="start", type=duration, metavar="TIME", help="look at the capture from this "
                    "time on (seconds from its start: 0.5, 20ms, 100us)")
     c.add_argument("--to", dest="end", type=duration, metavar="TIME", help="and up to this time")
     c.add_argument("--list", type=int, default=0, metavar="N", help="also list the first N changes of these "
                    "channels, with their times")
+    c.add_argument("--json", action="store_true")
+
+    c = command("find", "every moment in a saved capture that a trigger's text describes: edges, pulses of a "
+                        "length, levels that last, stages one after the other")
+    c.add_argument("file", metavar="FILE", help="a capture saved as .lb16 or .sr")
+    c.add_argument("text", metavar="TEXT", help="what to find, as a trigger is written: \"B0=r\", \"A0=0 pulse "
+                   "..50ns\" (glitches), \"A1=1 for 100us\" (gaps), \"A3=f then A6=r\".  Channels by id or name")
+    c.add_argument("--from", dest="start", type=duration, metavar="TIME", help="look from this time on (seconds "
+                   "from the capture's start: 0.5, 20ms, 100us)")
+    c.add_argument("--to", dest="end", type=duration, metavar="TIME", help="and up to this time")
+    c.add_argument("--limit", type=int, default=20, metavar="N", help="list N at the most (20; the total is "
+                                                                      "always counted)")
+    c.add_argument("--json", action="store_true")
+
+    c = command("detect", "what is on each channel of a saved capture: I2C, SPI, serial, a clock, PWM, or "
+                          "steady; with the words that decode each bus")
+    c.add_argument("file", metavar="FILE", help="a capture saved as .lb16 or .sr")
+    c.add_argument("--json", action="store_true")
+
+    c = command("plot", "a picture of a saved capture, as a PNG file: the channels over a time axis, with the "
+                        "trigger, marks and what decoders found")
+    c.add_argument("file", metavar="FILE", help="a capture saved as .lb16 or .sr")
+    c.add_argument("channels", nargs="*", metavar="CHANNEL", help="ids or names; none: those that change in the "
+                                                                   "part shown")
+    c.add_argument("-o", "--out", metavar="FILE.png", help="where to write it (FILE with .png in place of its "
+                                                           "ending if not given)")
+    c.add_argument("--from", dest="start", type=duration, metavar="TIME", help="show from this time on (seconds "
+                   "from the capture's start)")
+    c.add_argument("--to", dest="end", type=duration, metavar="TIME", help="and up to this time")
+    c.add_argument("--mark", type=durations, action="extend", default=[], metavar="TIME,...", help="lines at "
+                   "these times, numbered 1, 2 ...: \"1.2ms,1.35ms\"")
+    c.add_argument("--decode", action="append", default=[], metavar="WORDS", help="a row of what a decoder finds, "
+                   "as decode takes it: \"i2c scl=A1 sda=A0\" (needs sigrok-cli)")
+    c.add_argument("--width", type=int, default=1200, metavar="PIXELS", help="1200 if not given")
     c.add_argument("--json", action="store_true")
 
     c = command("decode", "what a protocol decoder finds in a saved capture: sigrok's decoders, run by "
@@ -233,8 +311,14 @@ def parser():
     c.add_argument("--dir", metavar="FOLDER", help="where the server keeps the captures it takes (a folder for "
                                                     "temporary files if not given)")
 
+    c = command("skill", "the skill file that tells an AI agent how to use the board: printed, or installed "
+                         "for Claude Code with --install")
+    c.add_argument("--install", nargs="?", const=SKILLS, metavar="FOLDER", help="write it into FOLDER/%s/SKILL.md "
+                   "(FOLDER: %s if not given, where Claude Code looks for skills; a project's .claude/skills "
+                   "for that project only)" % (SKILL, SKILLS))
+
     c = command("convert", "a saved capture in other formats")
-    c.add_argument("file", metavar="IN.lb16")
+    c.add_argument("file", metavar="IN", help="a capture saved as .lb16 or .sr")
     c.add_argument("files", nargs="+", metavar="OUT", help=".sr .vcd .csv .lb16")
 
     c = command("load", "loads the firmware and the FPGA's design, also when they are running already")
@@ -246,9 +330,12 @@ def parser():
 
 
 def main(argv=None):
-    args = parser().parse_args(argv)
     try:
+        args = parser().parse_args(argv)
         return run(args) or 0
+    except KeyboardInterrupt:               # anywhere: one line, no traceback
+        print("Stopped (Ctrl-C).", file=sys.stderr)
+        return 130
     except FileNotFoundError as e:
         print("%s: there is no such file." % e.filename, file=sys.stderr)
         return 1
@@ -264,7 +351,12 @@ def check(backend, stand_in):
     if backend is usb:
         usb.library()                       # says what to install if it is not there
         print("libusb: found.")
-    found = B.look(backend)
+
+    def told(line):                         # what the person must know of, or answer, on the way; not each step
+        if not line.startswith(("firmware: ", "FPGA: ")):
+            print(line)
+
+    found = B.look(backend, log=told)
     if found["state"] == "none":
         print("The board: not on USB.  Connect its USB-C socket to this computer and run this again.")
         return 1
@@ -276,7 +368,7 @@ def check(backend, stand_in):
         had = os.path.exists(B.FIRMWARE) or os.path.exists(B.kept_firmware())
         B.firmware_image()                  # downloads it if it is not here
         print("The firmware: %s." % ("on this computer" if had else "downloaded, checked and kept on this computer"))
-    with B.connect(backend=backend, log=None) as board:
+    with B.connect(backend=backend, log=told) as board:
         s, r = board.status(), board.registers()
         serial = board.dev.serial()
         print("Loaded: firmware version %d, FPGA design version %d%s."
@@ -318,6 +410,9 @@ def run(args):
         from . import mcp
         return mcp.serve(backend, args.fake, args.dir)
 
+    if cmd == "skill":
+        return skill(args)
+
     if cmd == "decoders":
         return decoders(args)
 
@@ -326,6 +421,15 @@ def run(args):
 
     if cmd == "measure":
         return measure(args)
+
+    if cmd == "find":
+        return find(args)
+
+    if cmd == "detect":
+        return detect(args)
+
+    if cmd == "plot":
+        return plot(args)
 
     if cmd in ("show", "convert"):
         cap = Capture.load(args.file)
@@ -346,10 +450,11 @@ def run(args):
         return check(backend, args.fake)
 
     if cmd == "info":
-        found = B.look(backend)
+        found = B.look(backend, log=say)
+        code = 0 if found["state"] in ("ready", "boot", "unconfigured") else 1
         if args.json:
             print(json.dumps(found, indent=1))
-            return 0
+            return code
         print(found["text"])
         if "firmware" in found:
             print("  firmware version %d%s" % (found["firmware"], ", FPGA design version %d" % found["design"]
@@ -357,20 +462,41 @@ def run(args):
         if "serial" in found:
             print("  serial number %s" % found["serial"])
         if found["state"] == "ready":
+            print("  board %s: thresholds from %g V to %g V" % ((found["revision"],) + tuple(found["threshold_range"])))
             print("  thresholds: pod A %.2f V, pod B %.2f V" % (found["threshold_a"], found["threshold_b"]))
             print("  inputs now: %s" % levels(found["inputs"]))
         elif found["state"] in ("boot", "unconfigured"):
             print("  Any command that needs the board loads it; \"logicboole load\" does only that.")
-        return 0 if found["state"] in ("ready", "boot", "unconfigured") else 1
+        return code
 
     if cmd == "load":
         B.connect(backend=backend, log=print, firmware=args.firmware, gateware=args.gateware, reload=True).close()
         return 0
 
     if cmd == "capture":
+        if args.test is not None:           # "--test x.sr": a file, not the pattern's shift
+            try:
+                args.test = int(args.test)
+            except ValueError:
+                args.files.insert(0, args.test)
+                args.test = 8
         for path in args.files:             # a file that cannot be written fails before the capture, not after
-            if path.rsplit(".", 1)[-1].lower() not in ("lb16", "sr", "vcd", "csv"):
-                raise ValueError("%s: a capture is saved as .lb16, .sr, .vcd or .csv" % path)
+            writable(path)
+        if args.before is not None:
+            before_text(args.before)
+        lb16_fits(args)
+        if not args.files:
+            say("No FILE given: the capture is shown, not saved.")
+        args.names = {}
+        for text in args.name or ():        # and so does a name that cannot be given
+            args.names.update(parse_names(text))
+        named = Capture(1, (), ())
+        for k, (_, name) in T.pi_names(T.pi_lines(args.pi)).items():   # the Pi's lines are named after them
+            named.names[k] = name
+        named.set_names(args.names)
+        if args.trigger and named.names != CHANNELS:    # the trigger may use the names: the board is given ids
+            from .search import with_ids
+            args.trigger = with_ids(named, args.trigger)
 
     with B.connect(backend=backend, log=say) as board:
         if cmd == "unload":
@@ -395,6 +521,29 @@ def run(args):
             return 0 if ok else 1
         elif cmd == "capture":
             return capture(board, args)
+    return 0
+
+
+def skill(args):
+    text = G.skill_text()
+    if args.install is None:
+        sys.stdout.write(text)
+        return 0
+    folder = os.path.join(os.path.expanduser(args.install), SKILL)
+    path = os.path.join(folder, "SKILL.md")
+    old = None
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as f:
+            old = f.read()
+    if old == text:
+        print("%s is there already, as this version has it." % path)
+        return 0
+    os.makedirs(folder, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(text)
+    print("%s %s." % ("updated" if old is not None else "wrote", path))
+    if os.path.normpath(os.path.expanduser(args.install)) == os.path.normpath(os.path.expanduser(SKILLS)):
+        print("Claude Code finds it in its next session.")
     return 0
 
 
@@ -463,7 +612,8 @@ def measure(args):
         print("  no channel changes there")
     for c in m["channels"]:
         print("  %s: %d changes (%d rising, %d falling); %s at the start"
-              % (c["channel"], c["changes"], c["rising"], c["falling"], "high" if c["starts"] else "low"))
+              % (cap.label(CHANNELS.index(c["channel"])), c["changes"], c["rising"], c["falling"],
+                 "high" if c["starts"] else "low"))
         for key, name in (("period", "period"), ("high", "high for"), ("low", "low for")):
             v = c[key]
             if v is None:
@@ -480,10 +630,194 @@ def measure(args):
                                         ", high %.4g %% of the time" % (100 * c["duty"]))
             print(line)
     for e in m["changes"]:
-        print("  %13.9f s  %s %s" % (e["time"], e["channel"], "rises" if e["level"] else "falls"))
+        print("  %13.9f s  %s %s" % (e["time"], cap.label(CHANNELS.index(e["channel"])),
+                                     "rises" if e["level"] else "falls"))
     if m["changes"] and m["changes_total"] > len(m["changes"]):
         print("  ... and %d more changes." % (m["changes_total"] - len(m["changes"])))
     return 0
+
+
+def find(args):
+    from . import search
+    cap = Capture.load(args.file)
+    found = search.find(cap, args.text, start=args.start, end=args.end, limit=max(0, args.limit))
+    if args.json:
+        print(json.dumps(found, indent=1))
+        return 0
+    print("%s: \"%s\" found %d time%s from %.9g s to %.9g s (a sample is %s)%s"
+          % (args.file, found["find"], found["total"], "" if found["total"] == 1 else "s", found["start"],
+             found["end"], span(found["sample_seconds"]), ":" if found["found"] else "."))
+    for f in found["found"]:
+        line = "  %13.9f s" % f["time"]
+        if "span" in f:
+            line += "   %s after the first stage (at %.9f s)" % (span(f["span"]), f["first"])
+        h = f.get("held")
+        if h:
+            line += "   %s %s, from %.9f s%s%s" % ("pulse" if "pulse" in found["find"] else "held", span(h["seconds"]),
+                                                 h["start"], " (before the part looked at)" if h.get("before") else "",
+                                                 ", still at the end" if h.get("to_end") else "")
+        print(line)
+    if found["total"] > len(found["found"]):
+        print("  ... and %d more (--limit lists more)." % (found["total"] - len(found["found"])))
+    h = found.get("held")
+    if h and found["total"] > 1:
+        print("  %s: the shortest %s, the median %s, the longest %s"
+              % ("pulses" if "pulse" in found["find"] else "held", span(h["min"]), span(h["median"]), span(h["max"])))
+    return 0
+
+
+def detect(args):
+    from . import detect as DT
+    cap = Capture.load(args.file)
+    found = DT.detect(cap)
+    if args.json:
+        print(json.dumps(found, indent=1))
+        return 0
+    print("%s: %s for %.9g s" % (args.file, rate_text(cap.rate), cap.seconds))
+    for b in found["buses"]:
+        if b["bus"] == "i2c":
+            what = "I2C      SDA %s, SCL %s; %s" % (b["sda"], b["scl"], hertz(b["clock_hz"]))
+        elif b["bus"] == "spi":
+            what = "SPI      %s; mode %d, %s" % (", ".join("%s %s" % (r.upper(), b[r]) for r in ("clk", "cs", "mosi", "miso")
+                                                         if r in b), b["mode"], hertz(b["clock_hz"]))
+        else:
+            what = "serial   %s at %d baud, %d%s1" % (b["rx"], b["baudrate"], b["data_bits"], b["parity"][0].upper())
+        print("  %s; %d bytes\n             decode: %s" % (what, b["bytes"], b["decode"]))
+    steady = {0: [], 1: []}
+    for c in found["channels"]:
+        k = CHANNELS.index(c["channel"])
+        if c["kind"] in ("clock", "pwm"):
+            print("  %s: %s, %s, high %.3g %% of the time" % (cap.label(k), "a clock" if c["kind"] == "clock" else "PWM",
+                                                           hertz(c["frequency"]), 100 * c["duty"]))
+        elif c["kind"] == "data":
+            print("  %s: %d changes, no bus found (high %.3g %% of the time)" % (cap.label(k), c["changes"],
+                                                                              100 * c["high"]))
+        elif c["kind"] == "steady":
+            steady[c["level"]].append(cap.label(k))
+    if steady[0] or steady[1]:
+        print("  steady: %s" % "; ".join("%s %s" % (" ".join(v), "low" if lvl == 0 else "high")
+                                         for lvl, v in steady.items() if v))
+    if not found["buses"]:
+        print("  no I2C, SPI or serial bus decodes cleanly here.")
+    else:
+        print("  The wiring is a guess from the signals: check it.  To name these channels in a capture: --name %s"
+              % ",".join(b["names"] for b in found["buses"]))
+    return 0
+
+
+def plot(args):
+    from . import plot as P
+    cap = Capture.load(args.file)
+    annotations = P.decoded(args.file, args.decode, args.start, args.end, cap.seconds)
+    png, info = P.plot(cap, args.channels or None, start=args.start, end=args.end, width=args.width,
+                       marks=args.mark, annotations=annotations, title=os.path.basename(args.file))
+    out = args.out or os.path.splitext(args.file)[0] + ".png"
+    with open(out, "wb") as f:
+        f.write(png)
+    info["file"] = out
+    if args.json:
+        print(json.dumps(info, indent=1))
+        return 0
+    print("wrote %s: %s from %.9g s to %.9g s, %s a pixel" % (out, " ".join(info["channels"]), info["start"],
+                                                             info["end"], span(info["seconds_per_pixel"])))
+    if info["busy"]:
+        print("  %s change more than once in a pixel in places, shown as bands: a shorter part (--from, --to) "
+              "shows each edge." % " ".join(info["busy"]))
+    for m in info["marks"]:
+        print("  mark %d at %.9g s" % (m["mark"], m["time"]))
+    if args.decode:
+        print("  %d decoded results drawn" % info["annotations"])
+    return 0
+
+
+def lb16_fits(args):
+    """Refuses, before the capture is taken, a length that an .lb16 file among its files cannot hold.  A capture
+    of no set length (-n 0) is checked as it is saved instead (save())."""
+    if not any(p.lower().endswith(".lb16") for p in args.files) or args.samples == 0:
+        return
+    if args.fast:
+        rate = F.mode_of(args.fast).rate(F.FASTEST)
+        count = round(args.samples) if args.samples is not None else round((args.time or 0.01) * rate)
+    else:
+        rate = B.nearest_rate(1e6 if args.rate is None else args.rate)[1]
+        count = round(args.samples) if args.samples is not None else round(
+            (1.0 if args.time is None else args.time) * rate)
+        if args.trigger:                    # what is kept from before the trigger comes on top
+            if args.before is None:
+                count += count // 10
+            else:
+                t, n = before_text(args.before)
+                count += n if t is None else round(t * rate)
+    if count >= LB16_SAMPLES:
+        raise ValueError("An .lb16 file holds 2^32 samples at most (%.4g s at %s), and this capture would have %d: "
+                         "save it as .sr, .vcd or .csv, or make it shorter." % (LB16_SAMPLES / rate, rate_text(rate),
+                                                                                count))
+
+
+def save(cap, paths):
+    """Writes the capture to each file, and returns the files written.  An .lb16 file that cannot hold it (a
+    capture of no set length that ran long) is written as an .sr file of the same name in its place, so that
+    nothing is lost."""
+    written = []
+    for path in paths:
+        try:
+            cap.save(path)
+            written.append(path)
+        except TooLong as e:
+            instead = path[:-len(".lb16")] + ".sr"
+            if instead not in paths:
+                cap.save(instead)
+                written.append(instead)
+                print("%s  Written as %s in its place." % (e, instead), file=sys.stderr)
+            else:
+                print("%s  It is in %s." % (e, instead), file=sys.stderr)
+    return written
+
+
+class Progress:
+    """What a capture is doing, on the standard error, for a person watching: waiting for its trigger, then how
+    far it has got (on a terminal, once it has run for a second)."""
+
+    def __init__(self, trigger=None, timeout=None, until_stopped=False, stream=None):
+        self.stream = stream or sys.stderr
+        self.trigger, self.timeout = trigger, timeout
+        self.tty = self.stream.isatty()
+        self.waiting, self.shown, self.line = False, None, False
+        self.t0 = time.monotonic()
+        if until_stopped:
+            self.say("Capturing until Ctrl-C.")
+
+    def say(self, text):
+        self.clear()
+        print(text, file=self.stream, flush=True)
+
+    def clear(self):
+        if self.line:
+            self.stream.write("\r" + " " * 6 + "\r")
+            self.line = False
+
+    def finish(self, cap):
+        """After the capture: a trigger that came between two looks at the board is still told of."""
+        self.clear()
+        if self.waiting and cap.trigger is not None:
+            self.say("Triggered.")
+
+    def __call__(self, part):
+        if part is None:                    # the board waits for the trigger
+            if not self.waiting:
+                self.waiting = True
+                self.say("Waiting for the trigger (%s)%s.  Ctrl-C stops."
+                         % (self.trigger, ", %s at the most" % span(self.timeout) if self.timeout else ""))
+            return
+        if self.waiting:
+            self.waiting = False
+            self.say("Triggered.")
+        if self.tty and time.monotonic() - self.t0 >= 1.0:
+            percent = int(100 * part)
+            if percent != self.shown:
+                self.shown, self.line = percent, True
+                self.stream.write("\r%3d %%" % percent)
+                self.stream.flush()
 
 
 def capture(board, args):
@@ -491,9 +825,7 @@ def capture(board, args):
         raise ValueError("With --clock the capture's length is a number of samples: -n 100000.")
     before = samples_before = None
     if args.before is not None:             # a time, or a number of samples
-        before = T.seconds(args.before)
-        if before is None:
-            samples_before = round(number(args.before))
+        before, samples_before = before_text(args.before)
     samples = None if args.samples is None else round(args.samples)
     if args.fast:                           # the fast design: it has the inputs, the length and the format only
         given = [name for name, value in (("--rate", args.rate), ("--trigger", args.trigger),
@@ -505,11 +837,12 @@ def capture(board, args):
                              "is set by how many inputs it takes." % " and ".join(given))
     asked = []
     old = signal.signal(signal.SIGINT, lambda *_: asked.append(1))     # Ctrl-C ends the capture; what it has is kept
+    progress = Progress(args.trigger, args.timeout, until_stopped=samples == 0)
     try:
         if args.fast:
             cap = board.capture_fast(args.fast, seconds=0.01 if args.time is None else args.time, samples=samples,
                                      fmt="raw" if args.raw else "rle", test=args.test, a=args.a, b=args.b,
-                                     cancel=lambda: bool(asked),
+                                     cancel=lambda: bool(asked), progress=progress,
                                      log=lambda line: print(line, file=sys.stderr))
         else:
             cap = board.capture(rate=1e6 if args.rate is None else args.rate,
@@ -517,14 +850,19 @@ def capture(board, args):
                                 fmt="raw" if args.raw else "rle", test=args.test, a=args.a, b=args.b,
                                 cancel=lambda: bool(asked), trigger=args.trigger, before=before,
                                 samples_before=samples_before, timeout=args.timeout, clock=args.clock,
-                                glitch=args.glitch, pi=args.pi)
+                                glitch=args.glitch, pi=args.pi, progress=progress)
     finally:
+        progress.clear()
         signal.signal(signal.SIGINT, old)
-    for path in args.files:
-        cap.save(path)
+    progress.finish(cap)
+    if getattr(args, "names", None):
+        cap.set_names(args.names)
+    files = save(cap, args.files)
+    # 3: saved, but not what was asked for
+    code = 1 if not cap.ok else 3 if cap.overflow or cap.stopped == "timeout" else 0
     if args.json:
-        print(json.dumps(as_json(cap, args.files), indent=1))
-        return 0 if cap.ok else 1
+        print(json.dumps(as_json(cap, files), indent=1))
+        return code
     print("%s: %d samples in %d words (%.1f MB), USB at %s; thresholds %.2f V and %.2f V"
           % ("a sample at each edge %s" % cap.info["clock"] if cap.info.get("clock")
              else "%s for %.9g s" % (rate_text(cap.rate), cap.seconds),
@@ -541,7 +879,8 @@ def capture(board, args):
         print(line)
     if cap.overflow:
         print("  OVERFLOW: the signals made more data than the board and USB carry, or the computer did not take "
-              "it fast enough.  The capture ends after %.9g s and is whole up to there." % cap.seconds)
+              "it fast enough.  The capture ends after %.9g s and is whole up to there.%s"
+              % (cap.seconds, B.slow_link(cap)))
     if cap.stopped:
         print("  ended early: %s" % {"stopped": "Ctrl-C", "size": "it had grown too large",
                                      "timeout": "the time given with --timeout had passed"}[cap.stopped])
@@ -555,9 +894,9 @@ def capture(board, args):
     else:
         print("  The channels are not listed: going through more than 50 million raw samples takes a while.  "
               "--json lists them.")
-    for path in args.files:
+    for path in files:
         print("wrote %s" % path)
-    return 0 if cap.ok else 1
+    return code
 
 
 if __name__ == "__main__":

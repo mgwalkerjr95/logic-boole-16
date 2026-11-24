@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "logicboole"
-version = "1.1.0"
+version = "1.2.0"
 description = "Host software for the Logic Boole 16, a 16-channel logic analyzer on USB 3"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -37,7 +37,11 @@ Issues = "https://github.com/mgwalkerjr95/logic-boole-16/issues"
 logicboole = "logicboole.cli:main"
 
 [tool.setuptools]
-packages = ["logicboole"]
+# the skill stays in skills/, where an agent's folder of skills expects it, and goes into the package as
+# logicboole/skills/ for "logicboole skill"
+packages = ["logicboole", "logicboole.skills"]
+package-dir = { "logicboole.skills" = "skills" }
 
 [tool.setuptools.package-data]
 logicboole = ["data/*", "web/*", "udev/*"]
+"logicboole.skills" = ["logic-boole-16/*"]

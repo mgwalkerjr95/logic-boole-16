@@ -52,6 +52,9 @@ def library():
     global _lib
     if _lib is not None:
         return _lib
+    if sys.platform == "win32":
+        raise UsbError("Windows is not supported yet: the board needs a driver there that it does not have.  Use "
+                       "macOS or Linux (a Raspberry Pi too).")
     u = None
     for path in (ctypes.util.find_library("usb-1.0"), "libusb-1.0.so.0", "/opt/homebrew/lib/libusb-1.0.dylib",
                  "/usr/local/lib/libusb-1.0.dylib"):
@@ -165,6 +168,7 @@ class Device:
 
     def __init__(self, lib, ctx, handle):
         self.lib, self.ctx, self.handle = lib, ctx, handle
+        self.error = None                   # libusb's error for the last get() that failed (-4: the device is gone)
 
     def close(self):
         if self.handle:
@@ -181,6 +185,7 @@ class Device:
         """A vendor request with data coming from the device: the bytes, or None if it failed or came short."""
         buf = ctypes.create_string_buffer(n)
         r = self.lib.libusb_control_transfer(self.handle, 0xC0, request, value, index, buf, n, timeout)
+        self.error = None if r == n else r if r < 0 else 0
         return buf.raw if r == n else None
 
     def serial(self):
@@ -235,6 +240,8 @@ class Reader:
     good during the call.  Nothing happens between calls of pump(), which lets libusb work for a few
     milliseconds.
 
+    Once a read has failed, nothing more is passed on: what sink was given is whole up to there.
+
     The stream's end: set `ending`, have the device send what it holds and then an empty packet, and call pump()
     until `ended` is true: a read came back that an empty packet had ended (see ended_by_empty_packet).  Reads
     are not called off while data may still come, because libusb on macOS reports a read that was called off as
@@ -244,6 +251,7 @@ class Reader:
         self.lib, self.ctx, self.sink = device.lib, device.ctx, sink
         self.packet = device.packet_size(endpoint)
         self.pending = self.bytes = self.short_reads = self.failed = 0
+        self.interrupted = False            # Ctrl-C came while libusb was in _done(): pump() raises it
         self.failure = None                 # what the first read that failed said
         self.sink_error = None              # what sink raised, if it did: nothing is passed on after that
         self.ending = self.ended = self.stopping = False
@@ -271,9 +279,17 @@ class Reader:
             self.pending += 1
 
     def _done(self, tp):                    # libusb calls this from inside pump()
+        try:
+            self._finished(tp)
+        except KeyboardInterrupt:           # Python would print it and go on, and the Ctrl-C would be lost
+            self.interrupted = True
+
+    def _finished(self, tp):
         t = tp.contents
         self.pending -= 1
-        if t.status == COMPLETED:
+        if t.status == COMPLETED and self.failed:
+            pass                            # after a read that failed: what follows it would leave a gap
+        elif t.status == COMPLETED:
             n = t.actual_length
             if n > 0:
                 self.last_data = time.monotonic()
@@ -302,6 +318,9 @@ class Reader:
         else:
             self.lib.libusb_handle_events_timeout_completed(self.ctx, ctypes.byref(self._zero), None)
             time.sleep(0.001)
+        if self.interrupted and not self.stopping:
+            self.interrupted = False
+            raise KeyboardInterrupt
 
     def close(self):
         """Calls off the reads still waiting and frees them."""
@@ -315,4 +334,7 @@ class Reader:
             for tp in self._transfers:
                 self.lib.libusb_free_transfer(tp)
         self._transfers = []
+        if self.interrupted:                # a Ctrl-C that came while the reads were called off
+            self.interrupted = False
+            raise KeyboardInterrupt
 

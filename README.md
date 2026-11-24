@@ -10,15 +10,24 @@ It runs from one USB-C cable on a computer, or sits on a Raspberry Pi 4 or 5 as 
 [![Hardware: CERN-OHL-S v2](https://img.shields.io/badge/hardware-CERN--OHL--S_v2-46553a?labelColor=20231c)](LICENSE)
 [![Software: GPL-3.0-or-later](https://img.shields.io/badge/software-GPL--3.0--or--later-46553a?labelColor=20231c)](software/LICENSE)
 [![Firmware: MIT](https://img.shields.io/badge/firmware-MIT-46553a?labelColor=20231c)](firmware/LICENSE)
-[![Board: revision C](https://img.shields.io/badge/board-revision_C-46553a?labelColor=20231c)](hardware/)
+[![Board: V1.0.0](https://img.shields.io/badge/board-V1.0.0-46553a?labelColor=20231c)](boards/)
 [![Hosts: macOS and Linux](https://img.shields.io/badge/hosts-macOS_%7C_Linux-46553a?labelColor=20231c)](#get-started)
 
-**[Quick start](docs/quick-start.pdf)** · **[Datasheet](docs/datasheet.pdf)** · **[Software](software/README.md)** · **[FPGA design](gateware/README.md)** · **[Firmware](firmware/README.md)** · **[Protocol](docs/protocol.md)** · **[Schematic](hardware/logic-boole-16_revC_schematic.pdf)**
+**[Quick start](boards/v1.0.0/docs/quick-start.pdf)** · **[Datasheet](boards/v1.0.0/docs/datasheet.pdf)** · **[Software](software/README.md)** · **[FPGA design](gateware/README.md)** · **[Firmware](firmware/README.md)** · **[Protocol](docs/protocol.md)** · **[Schematic](boards/v1.0.0/hardware/logic-boole-16_revC_schematic.pdf)**
 
 </div>
 
-This repository holds everything for board revision C: the KiCad project and fabrication files, the FPGA design,
-the firmware, and the software for the computer. The picture is a render of the design.
+This repository holds everything for the board: the KiCad project and fabrication files, the FPGA design, the
+firmware, and the software for the computer. The picture is a render of the design.
+
+## Board versions
+
+The version is printed on the back of the board. Each version keeps its own documents and design files in
+[boards/](boards/). The software, the FPGA design, the firmware and the [protocol](docs/protocol.md) are shared.
+
+| Version | On the back | Thresholds | Documents | Design files |
+|---|---|---|---|---|
+| **V1.0.0** (November 2026) | REV C · 2026 | 0.3 to 3 V | [Datasheet](boards/v1.0.0/docs/datasheet.pdf) · [Quick start](boards/v1.0.0/docs/quick-start.pdf) · [Schematic](boards/v1.0.0/hardware/logic-boole-16_revC_schematic.pdf) | [boards/v1.0.0/](boards/v1.0.0/) |
 
 ## What it does
 
@@ -41,8 +50,9 @@ the firmware, and the software for the computer. The picture is a render of the 
 <img src="docs/images/app.png" alt="The app in a browser: sixteen channels of waveforms on the left, and on the right the analyzers it found (SPI, I²C and two serial lines) with the messages they decoded">
 
 `logicboole` opens the app in your browser: waveforms, a threshold for each pod, the trigger, and decoders
-for I²C, SPI and serial that it can find by itself. The picture shows the app's built-in simulated signals, which
-need no board: `logicboole --fake` runs the whole software that way.
+for I²C, SPI and serial that it can find by itself. With a board on USB it opens on an empty scope: press Start.
+With no board it shows its own simulated signals, under a strip marked SIMULATED, as in the picture.
+`logicboole --fake` runs the whole software with a stand-in for the board.
 
 ## Get started
 
@@ -52,14 +62,16 @@ a USB-C plug for the board. A board comes with no cable, leads, spacers or screw
 **1. Install the software**
 
 ```sh
+brew install pipx libusb    # macOS, with Homebrew
+sudo apt install pipx       # Debian, Ubuntu, Raspberry Pi OS: libusb is there already
+pipx ensurepath             # once; then open a new terminal window
 pipx install logicboole
-brew install libusb    # macOS only. Linux has libusb already
 ```
 
-To get pipx: `brew install pipx` on a Mac; `sudo apt install pipx` on Debian, Ubuntu and Raspberry Pi OS. Then
-`pipx ensurepath` once, and a new terminal. (`pip install logicboole` in a virtual environment does the same.)
-On Linux, the first `logicboole check` with the board plugged in prints the three commands that install the USB
-rule, so that the board can be used without `sudo`: run them once.
+(`pip install logicboole` in a virtual environment does the same.) On Linux, the first `logicboole check` with
+the board plugged in prints one line of commands that installs the USB rule, so that the board can be used
+without `sudo`: run it once. To update the software later: `pipx upgrade logicboole`. A board that stayed
+plugged in meanwhile is loaded with the new firmware and FPGA design by the next command, which says so.
 
 From a copy of this repository nothing needs installing: `./logicboole`, in its top folder, does what
 `logicboole` does here.
@@ -80,44 +92,60 @@ keeps it: that once, the computer needs a connection to the internet.
 # The app, in your browser
 logicboole
 
-# A capture to a file, with a threshold for each pod
-logicboole capture bus.sr --rate 10M --time 2 -a 1.65 -b 0.9
+# A capture into two files, the app's own and one for PulseView, with a threshold for each pod
+logicboole capture bus.lb16 bus.sr --rate 10M --time 2 -a 1.65 -b 0.9
 
-# Wait for B0 to fall, and keep the millisecond after it
-logicboole capture reset.sr --rate 200M --time 1ms --trigger "B0=f"
+# Wait up to 10 seconds for B0 to fall, and keep the millisecond after it
+logicboole capture reset.sr --rate 200M --time 1ms --trigger "B0=f" --timeout 10
+
+# What is on each channel: I2C, SPI, serial, a clock, PWM
+logicboole detect bus.lb16
 
 # What a protocol decoder finds in a saved capture
 logicboole decode bus.lb16 i2c scl=A1 sda=A0
 
 # Periods, frequencies and pulse lengths
 logicboole measure bus.lb16
+
+# Every low pulse on A0 of 500 ns or less (a sample is 100 ns at 10 MS/s), and a picture of a part of the capture
+logicboole find bus.lb16 "A0=0 pulse ..500ns"
+logicboole plot bus.lb16 --from 1ms --to 1.2ms
 ```
 
+While the board waits for its trigger, `capture` prints
+`Waiting for the trigger (B0=f), 10 s at the most.  Ctrl-C stops.` Ctrl-C ends the wait early. If the trigger
+does not come, the file holds the last samples the board saw, the command says `NOT TRIGGERED`, and it exits with
+status 3.
+
 Captures are saved for PulseView (`.sr`), a waveform viewer (`.vcd`), a spreadsheet (`.csv`), or as the app's own
-`.lb16`. The decoders are sigrok's, more than a hundred of them, run through `sigrok-cli` if it is installed.
+`.lb16`; the commands that read captures read `.lb16` and `.sr`. The decoders are sigrok's, more than a hundred of
+them, run through `sigrok-cli` if it is installed. When something does not work,
+[docs/troubleshooting.md](docs/troubleshooting.md) goes through what to check. For help, write to
+support@nearfieldsupply.com, or open an issue at https://github.com/mgwalkerjr95/logic-boole-16/issues.
 
 > [!TIP]
-> The [quick start guide](docs/quick-start.pdf) goes from the box to a first capture on two pages: where the
+> The [quick start guide](boards/v1.0.0/docs/quick-start.pdf) goes from the box to a first capture on two pages: where the
 > cable and the probes go, and the steps in order. Connect ground first: join any pin of a pod's lower row to
 > your circuit's ground.
 
 **Scripts and AI agents.** `import logicboole` is a Python package that needs only libusb, and the commands
 print JSON with `--json`. An AI agent can use the board by itself: through the command line with the skill file
-in `software/skills/logic-boole-16/`, or through `logicboole mcp`, a Model Context Protocol server.
+(`logicboole skill --install` puts it where Claude Code finds it), or through `logicboole mcp`, a Model Context
+Protocol server.
 [software/README.md](software/README.md) has every command, the triggers, the Python package, and setting up
 an agent.
 
 ## Specifications
 
-The [datasheet](docs/datasheet.pdf) has the full tables, the pins, the dimensions and the limits.
+The [datasheet](boards/v1.0.0/docs/datasheet.pdf) has the full tables, the pins, the dimensions and the limits.
 
 | Item | Value |
 |---|---|
 | Channels | 16, in two keyed 2 × 8 pods. Every even pin is a ground |
 | Sample rate | 200 MS/s on 16 channels, or 200 MS/s divided by a whole number. With the fast FPGA design: 375 MS/s on 8 channels (a pod), 750 MS/s on 4 |
 | Fastest signal | Clocks up to 85 MHz and pulses down to 6 ns at 200 MS/s; clocks up to 200 MHz and pulses down to 2.5 ns at 750 MS/s |
-| Logic levels | 1.2 to 5 V by design. Captured so far: 3.3 V and 5 V logic |
-| Thresholds | 0.3 to 3.0 V in 0.75 mV steps, one for each pod |
+| Logic levels | 1.2 to 5 V. Captured so far: 3.3 V and 5 V logic |
+| Thresholds | 0.3 to 3.0 V in 0.764 mV steps, one for each pod |
 | Inputs | 1 MΩ and 10 pF to ground, designed for ±25 V |
 | Streaming, run-length format | 16 channels at 200 MS/s, for signals that change in up to 96 million samples a second |
 | Streaming, raw format | 16 channels at 100 MS/s, any signal. At 200 MS/s, 892,928 samples. With the fast design, any signal: 4 channels at 750 MS/s, 8 at 375 or 16 at 187.5 |
@@ -132,13 +160,14 @@ The [datasheet](docs/datasheet.pdf) has the full tables, the pins, the dimension
 
 | Document | What is in it |
 |---|---|
-| [Quick start guide](docs/quick-start.pdf) | From the box to a first capture, on two pages |
-| [Datasheet](docs/datasheet.pdf) | Specifications, pins, dimensions, typical uses, what has been measured and the known limits |
+| [Quick start guide](boards/v1.0.0/docs/quick-start.pdf) | From the box to a first capture, on two pages |
+| [Datasheet](boards/v1.0.0/docs/datasheet.pdf) | Specifications, pins, dimensions, typical uses, what has been measured and the known limits |
 | [Software](software/README.md) | Every command, the triggers, file formats, the Python package, AI agents |
 | [FPGA design](gateware/README.md) | What the design does, simulating it, building it, and the published bitstream |
 | [Firmware](firmware/README.md) | Building the FX3's firmware, and where the firmware image comes from |
+| [Troubleshooting](docs/troubleshooting.md) | What to check when the board is not found, a channel shows nothing, or a capture overflows |
 | [Protocol](docs/protocol.md) | The USB requests, the FPGA's registers and the format of the sample stream |
-| [Schematic](hardware/logic-boole-16_revC_schematic.pdf) | Eight sheets, as a PDF |
+| [Schematic](boards/v1.0.0/hardware/logic-boole-16_revC_schematic.pdf) | Eight sheets, as a PDF |
 
 ## What is here
 
@@ -148,12 +177,14 @@ The [datasheet](docs/datasheet.pdf) has the full tables, the pins, the dimension
 | `software/` | The host software: the app, the command line, the Python package, and the skill file and MCP server for AI agents, with the FPGA bitstream they load |
 | `gateware/` | The FPGA's design in Verilog, its simulation, and the script that builds it with ISE 14.7 |
 | `firmware/` | The FX3's firmware in C, built against Infineon's FX3 SDK |
-| `docs/` | The quick start guide and the datasheet, each as a PDF and as the page it is printed from, and the protocol |
-| `hardware/kicad/` | The KiCad 10 project: schematic (8 sheets), board, design rules, and the symbols and two footprints that are not in KiCad's own libraries |
-| `hardware/bom.csv` | Parts list: maker's part numbers, LCSC numbers, alternatives, and price and stock on the date given |
-| `hardware/fabrication/` | Gerber and drill files (also zipped), and the parts list and placement file for JLCPCB |
-| `hardware/3d/logic-boole-16.step` | 3D model of the assembled board |
-| `hardware/images/` | Renders of the [front](hardware/images/front.jpg) and the [back](hardware/images/back.jpg) |
+| `docs/` | The protocol, troubleshooting, and the pictures on this page |
+| `boards/` | A folder for each board version. What is in one: |
+| `boards/v1.0.0/docs/` | The quick start guide and the datasheet, each as a PDF and as the page it is printed from |
+| `boards/v1.0.0/hardware/kicad/` | The KiCad 10 project: schematic (8 sheets), board, design rules, and the symbols and two footprints that are not in KiCad's own libraries |
+| `boards/v1.0.0/hardware/bom.csv` | Parts list: maker's part numbers, LCSC numbers, alternatives, and price and stock on the date given |
+| `boards/v1.0.0/hardware/fabrication/` | Gerber and drill files (also zipped), and the parts list and placement file for JLCPCB |
+| `boards/v1.0.0/hardware/3d/` | 3D model of the assembled board |
+| `boards/v1.0.0/hardware/images/` | Renders of the [front](boards/v1.0.0/hardware/images/front.jpg) and the [back](boards/v1.0.0/hardware/images/back.jpg) |
 
 ## Changing it
 
@@ -161,7 +192,7 @@ The [datasheet](docs/datasheet.pdf) has the full tables, the pins, the dimension
   [software/README.md](software/README.md) says what is in each file.
 - **The FPGA's design** is simulated with Icarus Verilog (`sh gateware/sim.sh`) and built with ISE 14.7.
 - **The firmware** is one C file, built with `make` against Infineon's SDK.
-- **The hardware**: open `hardware/kicad/logic-boole-16.kicad_pro` in KiCad 10. The project carries its own
+- **The hardware**: open `boards/v1.0.0/hardware/kicad/logic-boole-16.kicad_pro` in KiCad 10. The project carries its own
   symbol and footprint libraries; everything else comes from the libraries KiCad installs.
 - `./logicboole load --gateware FILE.bin --firmware FILE.img` runs your build on the board, and
   `./logicboole selftest` then checks the path from the FPGA to the computer, every word compared. Nothing you
@@ -174,7 +205,7 @@ The [datasheet](docs/datasheet.pdf) has the full tables, the pins, the dimension
 
 <br>
 
-The fabrication files are the ones revision C was made from at JLCPCB.
+The fabrication files are the ones V1.0.0 (revision C) was made from at JLCPCB.
 
 **Bare board**
 
@@ -224,7 +255,7 @@ Copyright © 2026 Michael Walker.
 
 | Part | License | Text |
 |---|---|---|
-| `hardware/`, `gateware/`, `docs/`, and whatever is not named below | CERN-OHL-S v2 | [LICENSE](LICENSE) |
+| `boards/`, `gateware/`, `docs/`, and whatever is not named below | CERN-OHL-S v2 | [LICENSE](LICENSE) |
 | `software/` and the `logicboole` launcher | GPL-3.0-or-later | [software/LICENSE](software/LICENSE) |
 | `firmware/` | MIT | [firmware/LICENSE](firmware/LICENSE) |
 
@@ -252,7 +283,7 @@ under the host software's:
   Infineon's SDK. It is a file of the [firmware-2 release](https://github.com/mgwalkerjr95/logic-boole-16/releases/tag/firmware-2), for use on a Logic Boole 16; the host software
   downloads it from there once. [firmware/README.md](firmware/README.md) says how to build it yourself.
 
-The fonts in `docs/datasheet/fonts/` are other people's work, each under the SIL Open Font License:
-[docs/datasheet/fonts/README.md](docs/datasheet/fonts/README.md).
+The fonts in `boards/v1.0.0/docs/datasheet/fonts/` are other people's work, each under the SIL Open Font License:
+[their README](boards/v1.0.0/docs/datasheet/fonts/README.md).
 
 The name Logic Boole and its logo are not part of the licenses.

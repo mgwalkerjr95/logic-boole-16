@@ -17,5 +17,5 @@ The same from the command line: "logicboole capture bus.sr --rate 10M --time 2 -
 from .board import Board, BoardError, connect, look
 from .capture import CHANNELS, Capture
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 __all__ = ["Board", "BoardError", "Capture", "CHANNELS", "connect", "look"]

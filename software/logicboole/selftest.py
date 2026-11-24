@@ -21,8 +21,9 @@ there on, and from before it as many as were asked for or as the board had.  The
 the wait is ended, and what the board saw last must arrive.
 
 On a USB 2.0 link (480 Mbit/s) more of the captures overflow: all that make more words a second than that link
-carries.  That is no fault of the board.  What arrives of them is compared like the rest, and a capture with a
-trigger must still have the right trigger sample.
+carries.  That is no fault of the board, and nor is an overflow of a computer that does not read fast enough.
+What arrives of them is compared like the rest, and a capture with a trigger must still have the right trigger
+sample.
 """
 import time
 
@@ -88,12 +89,13 @@ def selftest(board, log=print, scale=1.0):
              + tuple((fmt, 10e6, 0, n, "count") for fmt, n in ENDS))
     for fmt, rate, shift, seconds, how in cases:
         if how in ("whole", "count"):       # a number of samples, not seconds
-            cap = board.capture(rate=rate, samples=seconds, fmt=fmt, test=shift)
+            cap = board.capture(rate=rate, samples=seconds, fmt=fmt, test=shift, keep=False)
         elif how:
             end = time.monotonic() + seconds * scale
-            cap = board.capture(rate=rate, samples=0, fmt=fmt, test=shift, cancel=lambda: time.monotonic() >= end)
+            cap = board.capture(rate=rate, samples=0, fmt=fmt, test=shift, keep=False,
+                                cancel=lambda: time.monotonic() >= end)
         else:
-            cap = board.capture(rate=rate, seconds=seconds * scale, fmt=fmt, test=shift)
+            cap = board.capture(rate=rate, seconds=seconds * scale, fmt=fmt, test=shift, keep=False)
         problems = list(cap.problems)
         if how == "whole" and cap.overflow:
             problems.append("it overflowed, and is small enough for the board's own buffers")
@@ -115,12 +117,12 @@ def selftest(board, log=print, scale=1.0):
         return passed
     for name, fmt, rate, shift, samples, before, stages, want in TRIGGERS:
         cap = board.capture(rate=rate, samples=samples, fmt=fmt, test=shift, trigger=stages, samples_before=before,
-                            timeout=None if want is not None else 0.3 if scale >= 1 else 0.05)
+                            timeout=None if want is not None else 0.3 if scale >= 1 else 0.05, keep=False)
         problems = list(cap.problems)
         at = cap.trigger
+        # An overflow after the trigger is the computer's or the link's, as in the captures above: what arrived
+        # of the capture is compared like the rest, and must still have the right trigger sample
         link = usb2 and words_a_second(fmt, rate, shift) > USB2_WORDS
-        if cap.overflow and not link:
-            problems.append("overflow after the trigger")
         slow += bool(cap.overflow and link)
         if want is None:
             if at is not None or cap.stopped != "timeout":
@@ -145,8 +147,8 @@ def selftest(board, log=print, scale=1.0):
             if not least <= at <= before + (fmt == "raw"):
                 problems.append("%d samples before the trigger, %d asked for" % (at, before))
             note = "the trigger sample is the right one, with %d samples before it" % at
-            if cap.overflow and link:
-                note += "; OVERFLOW after the trigger: more than USB 2.0 carries"
+            if cap.overflow:
+                note += "; OVERFLOW after the trigger%s" % (": more than USB 2.0 carries" if link else "")
         passed = passed and not problems
         log("%-4s %11.10g S/s  pattern shifted by %2d  %11d samples  %10d words  trigger: %s.  %s"
             % (fmt, cap.rate, shift, cap.samples, cap.info["words"], name,

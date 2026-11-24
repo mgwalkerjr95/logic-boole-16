@@ -9,15 +9,19 @@
 
 import { Walker, lowerBound, upperBound } from './capture.js';
 
+// What one analyzer holds at most: boxes to draw (each about 100 bytes in the page).  A decoder stops where it has
+// that many, and its stats.cut is the sample where it stopped.
+export const MAX_ANN = 500000;
+
 // ---- I2C: SDA and SCL ----
-// limit: stop after that many edges (auto-detect only looks at the beginning).
-export function decodeI2C(cap, cfg, limit = Infinity) {
+// limit: stop after that many edges (auto-detect only looks at the beginning).  most: as MAX_ANN.
+export function decodeI2C(cap, cfg, limit = Infinity, most = MAX_ANN) {
   const sda = cap.channels[cfg.sda], scl = cap.channels[cfg.scl];
   const a = sda.edges, c = scl.edges;
   let sdaL = sda.initial, sclL = scl.initial, ia = 0, ic = 0;
   const ann = [], rows = [];
   let txn = null, bits = 0, byte = 0, ack = false, byteStart = 0, first = true;
-  let errors = 0, stray = 0, bytes = 0, events = 0;
+  let errors = 0, stray = 0, bytes = 0, events = 0, cut;
 
   const emitByte = (e) => {
     bytes++;
@@ -42,6 +46,7 @@ export function decodeI2C(cap, cfg, limit = Infinity) {
 
   while ((ia < a.length || ic < c.length) && events++ < limit) {
     const sa = ia < a.length ? a[ia] : Infinity, sc = ic < c.length ? c[ic] : Infinity;
+    if (ann.length >= most) { cut = Math.min(sa, sc); break; }
     if (sc <= sa) {                         // the clock first when both change in one sample
       ic++; sclL ^= 1;
       if (sclL) {
@@ -70,15 +75,15 @@ export function decodeI2C(cap, cfg, limit = Infinity) {
       }
     }
   }
-  let cut = 0;
-  if (txn) { txn.e = cap.numSamples; txn.end = 'cut'; cut = 1; rows.push(txn); }
-  return { ann, rows, stats: { errors, stray, bytes, messages: rows.length - cut } };
+  let open = 0;
+  if (txn) { txn.e = cut ?? cap.numSamples; txn.end = 'cut'; open = 1; rows.push(txn); }
+  return { ann, rows, stats: { errors, stray, bytes, messages: rows.length - open, cut } };
 }
 
 // ---- SPI: clock, and any of MOSI, MISO, chip select ----
 // cfg: clk, mosi, miso, cs (-1 = not connected), cpol, cpha, bits, msb (true = most significant bit first),
-// csActive (0 = active low)
-export function decodeSPI(cap, cfg) {
+// csActive (0 = active low).  most: as MAX_ANN.
+export function decodeSPI(cap, cfg, most = MAX_ANN) {
   const clk = cap.channels[cfg.clk], E = clk.edges;
   const wOut = cfg.mosi >= 0 ? new Walker(cap.channels[cfg.mosi]) : null;
   const wIn = cfg.miso >= 0 ? new Walker(cap.channels[cfg.miso]) : null;
@@ -86,7 +91,7 @@ export function decodeSPI(cap, cfg) {
   const nbits = cfg.bits || 8, msb = cfg.msb !== false;
   const rising = (cfg.cpol ^ cfg.cpha) === 0;       // the edge on which data is taken
   const ann = [], rows = [];
-  let txn = null, n = 0, vo = 0, vi = 0, wordStart = 0, last = -1, spacing = 0, csI = 0, words = 0, extra = 0;
+  let txn = null, n = 0, vo = 0, vi = 0, wordStart = 0, last = -1, spacing = 0, csI = 0, words = 0, extra = 0, cut;
 
   const close = () => {
     if (!txn) return;
@@ -99,6 +104,7 @@ export function decodeSPI(cap, cfg) {
   for (let k = 0; k < E.length; k++) {
     if (((clk.initial ^ (k + 1) & 1) === 1) !== rising) continue;
     const s = E[k];
+    if (ann.length >= most) { cut = s; break; }
     let key;
     if (cs) {
       while (csI < cs.edges.length && cs.edges[csI] <= s) csI++;
@@ -128,12 +134,13 @@ export function decodeSPI(cap, cfg) {
     }
   }
   close();
-  return { ann, rows, stats: { words, extra, messages: rows.length } };
+  return { ann, rows, stats: { words, extra, messages: rows.length, cut } };
 }
 
 // ---- asynchronous serial (UART): one line ----
-// cfg: rx, baud, bits (8), parity ('none', 'even', 'odd'), stop (1 or 2), invert, msb
-export function decodeUART(cap, cfg) {
+// cfg: rx, baud, bits (8), parity ('none', 'even', 'odd'), stop (1 or 2), invert, msb.  limit: only the bytes whose
+// start bit begins at one of the line's first that many edges (auto-detect looks at a part).  most: as MAX_ANN.
+export function decodeUART(cap, cfg, limit = Infinity, most = MAX_ANN) {
   const ch = cap.channels[cfg.rx], E = ch.edges;
   const idle = cfg.invert ? 0 : 1;
   const nbits = cfg.bits || 8, par = cfg.parity && cfg.parity !== 'none' ? 1 : 0, nstop = cfg.stop || 1;
@@ -154,8 +161,9 @@ export function decodeUART(cap, cfg) {
   for (;;) {
     i = lowerBound(E, p, i);
     while (i < E.length && (ch.initial ^ (i + 1) & 1) === idle) i++;   // an edge away from idle
-    if (i >= E.length) break;
+    if (i >= E.length || i >= limit) break;
     const s0 = E[i];
+    if (ann.length >= most) { stats.cut = s0; break; }
     if (s0 + bit * (1.5 + nbits + par) >= cap.numSamples) break;        // the capture ends inside this byte
     hint = i;
     if (lvl(Math.floor(s0 + bit / 2)) === idle) { p = s0 + 1; continue; }   // shorter than half a bit: a glitch
@@ -187,7 +195,7 @@ export function decodeUART(cap, cfg) {
 }
 
 // The speed of a serial line from its pulse widths: every pulse is a whole number of bits long.
-const BAUDS = [300, 600, 1200, 2400, 4800, 9600, 14400, 19200, 28800, 38400, 57600, 76800, 115200, 230400, 250000,
+export const BAUDS = [300, 600, 1200, 2400, 4800, 9600, 14400, 19200, 28800, 38400, 57600, 76800, 115200, 230400, 250000,
   460800, 500000, 921600, 1000000, 1500000, 2000000, 3000000];
 export function estimateBaud(cap, chIndex) {
   const E = cap.channels[chIndex].edges;

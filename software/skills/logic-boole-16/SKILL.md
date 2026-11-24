@@ -7,15 +7,23 @@ license: GPL-3.0-or-later
 # Logic Boole 16
 
 A 16-channel logic analyzer on USB. You drive it with the `logicboole` command: take a capture into a file, then
-read times and protocol messages off that file. `info`, `inputs`, `threshold`, `capture`, `show`, `measure`,
-`decode` and `decoders` print JSON with `--json`.
+read times and protocol messages off that file, and look at it as a picture. `info`, `inputs`, `threshold`,
+`capture`, `show`, `measure`, `find`, `detect`, `plot`, `decode` and `decoders` print JSON with `--json`.
+
+This file goes with the software it came with (`logicboole --version`). If a command or option written here is
+refused as unknown, the software is older than this file: `pipx upgrade logicboole`. If the software has a
+command this file does not describe, this file is the older one: `logicboole skill --install` puts the one that
+matches in place (from a copy of the repository, `cp -r software/skills/logic-boole-16 ~/.claude/skills/` does
+the same). After an upgrade, the next command loads the new firmware and FPGA design into a board that stayed
+plugged in, and says so in a line.
 
 ## The board, in the terms the commands use
 
 - 16 inputs in two pods: `A0` ... `A7` and `B0` ... `B7`.
-- Each pod has one threshold, 0.3 V to 3 V. An input reads 1 above its pod's threshold. Set it to about half
-  the logic voltage of the signals on that pod: 1.65 for 3.3 V logic, 0.9 for 1.8 V. Two logic voltages go on
-  two pods.
+- Each pod has one threshold, within the range the board takes: 0.3 V to 3 V on a V1.0.0 board
+  (`logicboole info --json` gives the board's `revision` and `threshold_range`); one outside it is refused. An
+  input reads 1 above its pod's threshold. Set it to about half the logic voltage of the signals on that pod:
+  1.65 for 3.3 V logic, 0.9 for 1.8 V. Two logic voltages go on two pods.
 - It samples at 200 MS/s divided by a whole number: 200M, 100M, 50M, 10M, 1M ... The board takes the nearest
   rate to the one asked for, and the answer says which.
 - With `--fast` it samples fewer inputs faster: four at 750 MS/s, a pod of eight at 375 MS/s (see "Faster than
@@ -39,14 +47,19 @@ thresholds set by one command are gone in the next (a real board keeps them).
 
     logicboole --fake capture --json --rate 2M --time 50ms /tmp/try.lb16
 
-With `--json` the standard output is one JSON object and nothing else; lines about loading the board go to the
-standard error. A board that was just plugged in is loaded by the first command that needs it, in about three
+With `--json` the standard output is one JSON object and nothing else; lines about loading the board and about
+waiting for a trigger go to the standard error. A board that was just plugged in is loaded by the first command that needs it, in about three
 seconds. A command that fails prints the reason on the standard error and exits with status 1: read the reason,
 it says what to change. (Status 2 is a command line that was not understood, an option the command does not
-have: `logicboole COMMAND -h` lists them.)
+have: `logicboole COMMAND -h` lists them.) A capture that was saved but is not what was asked for exits with
+status 3: it overflowed, or `--timeout` passed before its trigger came (with `--clock`, before it had its
+samples).
 
 Run one command on the board at a time. Do not start plain `logicboole` (no command): that is the app in a
-browser, and it does not return.
+browser, and it does not return. "Another program is capturing from the board" means the app, an MCP server or
+another command has it: tell the user, and leave it to them to end that program (`logicboole load` takes the board
+back, and ends that program's capture). A capture left running by a program that has ended is stopped by the next
+command, which says so in a line.
 
 ## The steps
 
@@ -54,14 +67,15 @@ browser, and it does not return.
    when needed) when there is a board; `none` means no board on USB; `noaccess` means the computer lists the
    board and does not let this program open it (on Linux the USB rule is not installed; on a Mac, macOS has not
    let the board connect), and `text` says what to do: pass that on to the user, who has to do it. When ready it
-   also gives the board's serial number (`serial`), the thresholds and the inputs' levels now.
+   also gives the board's serial number (`serial`), its `revision` and `threshold_range`, the thresholds and the
+   inputs' levels now.
 2. **Set the thresholds** for the logic voltages in use: `-a 1.65 -b 0.9` on the capture, or
    `logicboole threshold 1.65 0.9`. They stay set until the board is unplugged; a capture's answer says which
    were in force.
 3. **Capture** into an `.lb16` file (see below).
 4. **Check the capture** before using it (see "Reading the capture's answer").
-5. **Measure or decode** the file. Both read the file only, so they can be repeated with other settings as often
-   as needed without the board.
+5. **Read the file**: `detect` what is on it if nobody has said, then `measure`, `find`, `decode` and `plot`.
+   They read the file only, so they can be repeated with other settings as often as needed without the board.
 6. **Report** what the numbers show, with their resolution.
 
 ## Capturing
@@ -76,16 +90,28 @@ browser, and it does not return.
 | `-a`, `-b` | The thresholds of pod A and pod B |
 | `--trigger "..."` | Wait for this and count the length from it |
 | `--before` | With a trigger: how much from before it to keep, as a time with its unit (`5ms`). A number with no unit is a number of samples. A tenth of the length if not given |
-| `--timeout` | With a trigger: stop waiting after this long (`10` is 10 seconds). Always give it |
+| `--timeout` | With a trigger: stop waiting after this long (`10` is 10 seconds). Always give it. With `--clock`: how long the whole capture may take |
 | `--glitch 50ns` | A change counts once the input held its new level this long (10 ns to 1.25 us) |
 | `--clock A0=r` | One sample at each rising edge of A0, in place of the sample rate (with `-n`) |
-| `--pi i2c` | Only with the board on a Raspberry Pi and its solder jumpers closed: the Pi's own lines in place of probes. `i2c` (SDA on A0, SCL on A1), `uart` (TXD A2, RXD A3), `spi` (MOSI A4, MISO A5, SCLK A6, CE0 A7, CE1 B0), `all`. An open jumper reads low |
+| `--pi i2c` | Only with the board on a Raspberry Pi and its solder jumpers closed: the Pi's own lines in place of probes. `i2c` (SDA on A0, SCL on A1), `uart` (TXD A2, RXD A3), `spi` (MOSI A4, MISO A5, SCLK A6, CE0 A7, CE1 B0), `all`. The channels are named after the lines. An open jumper reads low |
 | `--raw` | Every sample, not only the changes: for signals that change at nearly every sample |
 | `--fast A0-A3` | Four inputs at 750 MS/s, or a pod (`A`, `B`) at 375 MS/s, in place of `--rate`. No trigger (see below) |
+| `--name A0=SDA,A1=SCL` | Names for channels, saved in the file (see below) |
+
+**Name the channels** once you know the wiring: `--name A0=SDA,A1=SCL,B0=RESET`. The names are saved in the
+`.lb16` and `.sr` files, the app shows them, and `measure`, `find`, `plot` and `decode` then take `SDA` where
+they take `A0` (`find run.lb16 "SDA=f SCL=1"`, `decode run.lb16 i2c scl=SCL sda=SDA`), and their answers carry
+`name` beside `channel`. A name is up to 24 letters, digits and `_ . + # / -`; not another channel's id, not
+`in`, `then`, `for` or `pulse`, and not two channels with one name. The capture's own `--trigger` takes the
+names given with it (`--name A0=SDA,A1=SCL --trigger "SDA=f SCL=1"`); `--clock` and `--glitch` take ids.
 
 **Which rate.** At least 4 times the fastest signal's bit rate to decode it, 10 times or more to measure its
 timing. A time read off a capture can be off by one sample at each end, so the rate sets the resolution: 5 ns
 at 200M, 1 us at 1M. When unsure go higher; idle time costs nothing.
+
+**How long.** The computer keeps a capture's data in its memory, up to a 32nd of it: a capture that grows past
+that ends early, whole up to its last sample, with `stopped` `"size"`. On a computer with 8 GB that is 64 million
+changes of the inputs, 0.7 s of a 48 MHz clock at 200M. Quiet buses are far from it at any rate.
 
 **Faster than 200 MS/s.** `--fast` loads the board's second FPGA design, which trades inputs for speed:
 
@@ -111,9 +137,12 @@ it into samples takes minutes.
 In the answer `info.fast` names the choice and `info.inputs` the inputs taken. The other inputs still appear in
 `channels`, reading 0 with no changes: they were not sampled, so say nothing about them.
 
-**Save as `.lb16`.** It is small, and `measure` and `decode` read it. Name `.sr`, `.vcd` or `.csv` files as
+**Save as `.lb16`.** It is small, and the commands that read captures read it. Name `.sr`, `.vcd` or `.csv` files as
 well only when the user wants to open the capture in PulseView, GTKWave or a spreadsheet; an `.sr` file holds
-every sample and gets large at high rates.
+every sample and gets large at high rates. `measure`, `find`, `detect`, `plot`, `decode` and `show` read `.sr`
+files too, so a capture the user made in PulseView can be read the same way; one written by `logicboole` also
+keeps the trigger's place and the thresholds. An `.lb16` file holds 2^32 samples (21 s at 200 MS/s): a longer
+capture into one is refused before it starts, and the error says what to do.
 
 **Triggers.** Without a trigger the capture starts at once, at whatever moment that is: its first message may
 be cut off, and "the first transaction" is only the first one captured. To start at a known point, or to catch
@@ -131,12 +160,15 @@ something that happens once or rarely, describe it:
 
     logicboole capture --json --rate 200M --time 1ms --trigger "B0=f" --before 100us --timeout 10 reset.lb16
 
+While the board waits, the command prints `Waiting for the trigger (B0=f), 10 s at the most.  Ctrl-C stops.` on
+the standard error, and nothing else until the trigger comes or the time is up. Ctrl-C ends the wait early.
+
 An I2C start is SDA falling while SCL is high: `--trigger "A0=f A1=1"` with SDA on A0 and SCL on A1. For what a
 circuit sends first after a reset, trigger on the reset line, or on the bus's first edge while the user resets.
 
 The board looks for the trigger in the samples it keeps, so a trigger sees what the rate shows: to catch a
 short pulse, pick a rate whose sample is shorter than the pulse, and times in a trigger are rounded to whole
-samples.
+samples. A time that rounds to no sample at all is refused, and the error gives the sample's length.
 
 Always give `--timeout` with a trigger. Without it the command waits until the trigger comes, and if it never
 does you wait for ever. If the user has to do something to make the event happen (press reset, plug a cable),
@@ -153,15 +185,17 @@ tell them before you start the capture and give a timeout long enough for them t
 ```
 
 - `ok` false: the capture failed its checks and `problems` says why. Do not use it. Take it again.
-- `overflow` true: the signals changed faster than the board and USB carry. The capture ended early and is
-  whole up to its end (`samples` says how far it got). A lower rate avoids it, or `--raw` for a short capture
-  of a signal that changes at nearly every sample. If `logicboole info` says the link is USB 2.0 (480 Mbit/s),
-  it carries about 11 million words a second in place of nearly 100 million: tell the user that a USB 3 port
-  and cable carry more.
+- `overflow` true (exit status 3): the signals changed faster than the board and USB carry. The capture ended
+  early and is whole up to its end (`samples` says how far it got). A lower rate avoids it, or `--raw` for a
+  short capture of a signal that changes at nearly every sample. If `info.usb` (or `logicboole info`) says the
+  link is USB 2.0 (480 Mbit/s), it carries about 11 million words a second in place of nearly 100 million: tell
+  the user that a USB 3 port and cable carry more.
+- `stopped` `"size"`: the capture reached the memory limit above and ended there, whole. Take a shorter or slower
+  one.
 - With a trigger: `trigger_sample` and `trigger_seconds` say where in the capture the trigger is. `null` with
   `stopped` `"timeout"` means the trigger did not come, and the capture holds only the last samples the board
-  saw. `ok` is still true and the exit status 0, because nothing went wrong in the board: these two fields are
-  the only sign. Say that the event did not happen in that time; do not present that capture as the event.
+  saw. `ok` is still true, because nothing went wrong in the board, and the exit status is 3. Say that the event
+  did not happen in that time; do not present that capture as the event.
 - `channels`: for each input how often it changed, when first, and its level at the start. This is the
   quickest check that you are looking at the right wires.
 - `info` holds details of the transfer (words sent, how long the read took, the USB link). Nothing in it is
@@ -179,12 +213,33 @@ trigger on either edge (`B3=e`) with a timeout while the user makes the event ha
 pod's threshold at 0.3 V (a line that still reads 0 is below 0.3 V, not at a middle level), and a multimeter
 on the pin, which is the only one of the three that shows a voltage.
 
+## What is on each channel
+
+    logicboole detect run.lb16 --json
+
+`detect` looks at every channel and says what it carries, as the app's auto-detect does. `buses` lists the
+I2C, SPI and serial lines it finds, each with its wiring (`sda`, `scl`; `clk`, `cs`, `mosi`, `miso`; `rx`), its
+`clock_hz`, or `baudrate` with `data_bits` and `parity`, SPI's `mode`, how many `bytes` decoded cleanly, `decode`
+(the words for `decode` and `plot --decode`) and `names` (for `--name`: `SDA`, `SCL`, `SPI_CLK`, `SPI_CS`,
+`SPI_MOSI`, `SPI_MISO`, `UART`, with a number from 2 on when a name is taken). `channels` gives each input's
+`kind`: the bus it is part of,
+`clock` or `pwm` (with `frequency` and `duty`), `data` (it changes, and no bus was found on it), or `steady`
+(with its `level`).
+
+Use it first when the user has not said what is on which input, then tell them what you take each input to be:
+the wiring is a guess from the signals. It knows the common buses at their usual settings (serial at the
+standard baud rates as 8N1, 8E1, 8O1 or 7E1, idling high; SPI with one chip select); `data` on a line that
+should be a bus means a setting it does not try, or a capture too short or too slow to tell, and `decode` with
+the right words still works on it. SPI with two chip selects on one clock (two devices) is not found, because each select sees
+the other device's clock: `decode` each with its own `cs=`. A chip select that reads low from the start of the
+capture can be taken for a data line: check the roles against the wiring.
+
 ## Measuring
 
     logicboole measure run.lb16 A0 A3 --json
-    logicboole measure run.lb16 A0 --from 10ms --to 12ms --list 50 --json
+    logicboole measure run.lb16 SCL --from 10ms --to 12ms --list 50 --json
 
-For each channel named (or, with none named, each that changes): `changes`, `rising`, `falling`, its level at
+For each channel named, by id or by its name in the capture (or, with none named, each that changes): `changes`, `rising`, `falling`, its level at
 the start, and `period` (rising edge to rising edge), `high` and `low` (how long it stays there), each as
 `min`, `median` and `max` in seconds; `frequency` is 1 / the median period and `duty` the share of the time
 it is high. `--list N` adds the first N changes themselves as `{"time", "sample", "channel", "level"}`, across
@@ -202,10 +257,35 @@ gap and is not a slow clock, `frequency` (from the median) is the clock's rate i
 over the whole capture counts the idle time, so measure it inside one burst with `--from` and `--to`.
 `sample_seconds` in the answer is one sample: the resolution of every time in it.
 
-**Gaps between bursts.** `measure` does not list them. Take them from the changes (`--list`) or, on a decoded
-bus, from the messages' own start and end: `decode ... --only start,stop --json` on I2C gives every start and
-stop, and the idle time is the next start minus the stop before it. Say which gap you report: from the end of
-one message to the start of the next, or from start to start (how often it repeats).
+**Gaps between bursts.** `measure` does not list them: `find` does (below). On a decoded bus the messages' own
+start and end give them too: `decode ... --only start,stop --json` on I2C gives every start and stop, and the
+idle time is the next start minus the stop before it. Say which gap you report: from the end of one message to
+the start of the next, or from start to start (how often it repeats).
+
+## Finding moments
+
+    logicboole find run.lb16 "A0=0 pulse ..500ns" --json      # glitches: low pulses of 500 ns or less
+    logicboole find run.lb16 "SCL=1 for 50us" --json          # gaps in a bus, with how long each lasted
+    logicboole find run.lb16 "CS=f then SCLK=e" --json        # CS falling, then the next clock edge
+
+`find` takes the text of a trigger (the table under "Triggers"; channels by id or name) and lists every moment
+in the capture that meets it, by the trigger's own rules: what it finds is what that trigger would have caught.
+TRIG IN is not in a capture. Each moment in `found` has its `time`, in seconds from the capture's start (the
+sample that meets the last stage).
+
+- When the last stage is a pulse or levels, `held` gives how long they lasted: for a pulse, the pulse; for
+  levels, the whole stretch in which they held, from `start` to `end`. `to_end` means they still held where
+  the search ended, and `before` that they held already where it began, so each lasted longer than it shows.
+  `held` at the top gives the `min`, `median` and `max` of them all.
+- With stages (`then`), `first` is where the first stage was met and `span` the time from there to `time`.
+- A first stage of levels is met once in each stretch of them, not at every sample: `"SCL=1 for 50us"` finds
+  each gap once.
+- `total` counts them all; `--limit N` lists N (20 if not given, 2000 at the most). `--from` and `--to` look
+  in a part.
+
+A pulse shorter than one sample is not in the capture at all, so `total` 0 means nothing longer than one sample
+at that rate: say so. The times in the text are counted in samples too: `run.lb16` above is at 10M, a sample
+every 100 ns, and a time that rounds to no sample (`..50ns` there) is refused with the sample's length.
 
 ## Decoding a protocol
 
@@ -250,6 +330,45 @@ who answers, list `--only address-write,address-read,ack,nack,data-read,stop`: a
 address means nobody answered at that address, but a `nack` after the last `data-read` of a read is the
 master ending the read, which is normal. With the acks and the data left out the two look the same.
 
+## Looking at a capture
+
+    logicboole plot run.lb16 SDA SCL --from 1ms --to 1.4ms --mark 1.2ms --decode "i2c scl=SCL sda=SDA" -o look.png
+
+`plot` draws the capture as a PNG: the channels as waveforms over a time axis, the trigger as a dashed red line,
+numbered orange lines at the `--mark` times (`--mark 1.2ms,1.35ms`), and a row for each `--decode` with what
+that decoder found (it needs sigrok-cli). With no channels named it shows the ones that change in that part.
+It writes FILE.png beside the capture if `-o` is not given; `--width` is 1200 pixels, 4000 at the most.
+
+If you can read images, read it: it is a check on what the numbers told you (a decode that looks wrong, a pulse
+that should not be there, which edge a time runs from), and a picture to show the user, with marks at the times
+you report. Where a channel changes more than once within a pixel it is drawn as a pale band, and the answer
+lists that channel in `busy`: show a shorter part to see its edges. A picture of a whole busy capture is mostly
+bands; one message, or a few hundred microseconds around a moment `find` gave, is what shows the bits.
+
+## Recipes
+
+**"What is on this bus?"** Capture with no trigger at a rate fast enough for anything likely (`--rate 10M
+--time 0.5` covers buses up to about 2 MHz), run `detect`, and tell the user what you take each input to be.
+Then capture again with `--name` from its `names` and a trigger at the start of a message, and `decode` with its
+`decode` words.
+
+**"Find the glitch."** Capture at a rate whose sample is shorter than the glitch could be (`200M`: 5 ns), as
+long as the fault takes to show, then `find run.lb16 "RESET=0 pulse ..1us"` (and `=1` for high pulses). Each
+one found has its time and length; `plot` around it with `--mark` at its time to show it. To catch one that is
+rare, give the same text to `--trigger`, with a `--timeout`.
+
+**"How long from CS low to the first clock edge?"** `find run.lb16 "CS=f then SCLK=e" --json`: each `span` is
+that time, for every transfer in the capture. Report the min, median and max, with the resolution: one sample at
+each end.
+
+**"How often does it send, and how long are the gaps?"** `find run.lb16 "SCL=1 for 50us"` (longer than any
+pause inside a message): each moment is a gap, `held.seconds` its length and `held.end` where the next message
+begins, so the steps between successive `held.end` are how often it sends.
+
+**"Did the device answer?"** On I2C, `decode ... --only address-write,address-read,ack,nack` (see the I2C
+paragraph above for reading it). On serial, `decode` the device's TX line: `total` 0 with a busy line means the
+wrong baud rate; `detect` gives the right one.
+
 ## Reporting
 
 - Give numbers with their resolution: "SCL runs at 100 kHz (period 10 us, measured to within 0.5 us at
@@ -267,9 +386,12 @@ master ending the read, which is normal. With the acks and the data left out the
 ## Without a shell
 
 `logicboole mcp` is a Model Context Protocol server with the same abilities as tools (`board_info`,
-`set_thresholds`, `read_inputs`, `capture`, `measure`, `decode`, `list_decoders`, `self_test`), for an agent
-that cannot run commands. `capture` takes `fast` as `--fast` above, and lists the inputs it did not take in
-`not_taken`; `self_test` takes `fast: true`. With a shell, the commands above are enough.
+`set_thresholds`, `read_inputs`, `capture`, `measure`, `find`, `detect`, `plot`, `decode`, `list_decoders`,
+`self_test`), for an agent that cannot run commands. Its `guide` tool gives this file, with a table of which
+tool and argument stands for each command and option. `capture` takes `fast` as `--fast` above, and lists the
+inputs it did not take in `not_taken`; its `timeout` is 10 seconds if not given, with a trigger or a capture
+clock, and its `save_as` refuses a file that is there already unless `overwrite` is true. `self_test` takes
+`fast: true`; `plot` returns the picture itself. With a shell, the commands above are enough.
 
 ## If the board itself is in doubt
 
@@ -279,3 +401,7 @@ compares every word that arrives. It needs nothing connected to the probes; its 
 what it does not check is the inputs themselves. On a USB 2.0 link it still passes, and its last lines say
 how many of its captures overflowed because that link carries less. `logicboole selftest --fast` does the same
 for the fast design, with each choice of inputs.
+
+For help with the board or the software, the user can write to support@nearfieldsupply.com, or open an issue at
+https://github.com/mgwalkerjr95/logic-boole-16/issues, with what `logicboole --version` and
+`logicboole info --json` print.

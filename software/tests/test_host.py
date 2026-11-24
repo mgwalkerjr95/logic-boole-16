@@ -6,7 +6,9 @@
 The stand-in board (logicboole/fake.py) answers the USB requests as the firmware and the FPGA's design do, and
 codes its samples by a route of its own, so what is compared here was worked out twice.
 """
+import base64
 import contextlib
+import ctypes
 import hashlib
 import io
 import json
@@ -14,26 +16,46 @@ import os
 import queue
 import random
 import shutil
+import socket
 import struct
 import subprocess
 import sys
 import tempfile
 import threading
+import time
 import unittest
 import unittest.mock
 import urllib.error
 import urllib.parse
 import urllib.request
 import zipfile
+import zlib
 from array import array
+from bisect import bisect_right
 from http.server import ThreadingHTTPServer
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 import logicboole                                           # noqa: E402
 from logicboole import board as B, cli, decode as D, fake, fast as F, mcp, server, trigger as T, usb   # noqa: E402
-from logicboole import words as W                           # noqa: E402
+from logicboole import capture as C, detect as DT, guide as G, plot as P, search, words as W   # noqa: E402
 from logicboole.capture import CHANNELS, Capture            # noqa: E402
 from logicboole.selftest import selftest, selftest_fast     # noqa: E402
+
+# A revision made up for the tests, beside the real ones: a scale on which a design's starting duty cycle (2048)
+# is not START_THRESHOLD, so that setting the thresholds after a load is checked too
+MADE_UP = B.Revision("VTEST", 0.4, 0.3, 5.0)
+
+
+class SlowClock:
+    """board.py's clock running at a tenth of the speed.  The stand-in makes the busy test pattern far more slowly
+    than the FPGA does, and a capture's deadline (the time it should take, and a little more) is for a real board."""
+
+    def __getattr__(self, name):
+        return getattr(time, name)
+
+    @staticmethod
+    def monotonic():
+        return time.monotonic() / 10
 
 
 def coded(runs, fmt):
@@ -58,6 +80,53 @@ def random_runs(rng, count, longest):
         runs.append((v, rng.choice((1, 1, 2, 3, 7, rng.randrange(1, longest)))))
         last = v
     return runs
+
+
+def capture_of(rate, total, lines, trigger=None):
+    """A capture from each line's level at sample 0 and the samples at which it changes: {channel: (level, [...])}."""
+    cuts = sorted({s for _, e in lines.values() for s in e if 0 < s < total})
+    values, lengths = array("H"), array("Q")
+    for a, b in zip([0] + cuts, cuts + [total]):
+        values.append(sum((level ^ (bisect_right(e, a) & 1)) << ch for ch, (level, e) in lines.items()))
+        lengths.append(b - a)
+    return Capture(rate, values, lengths, trigger=trigger)
+
+
+def uart_edges(start, bit, data, bits=8, parity="none"):
+    """A serial line idling high: 8 data bits (or `bits`), the lowest first, a parity bit if parity is "even" or
+    "odd", one stop bit and two bits' rest after each byte."""
+    edges, level, t = [], 1, start
+    for byte in data:
+        frame = [byte >> i & 1 for i in range(bits)]
+        if parity != "none":
+            frame.append((sum(frame) + (parity == "odd")) & 1)
+        for b in [0] + frame + [1, 1, 1]:
+            if b != level:
+                edges.append(round(t))
+                level = b
+            t += bit
+    return edges
+
+
+def spi_edges(start, half, transfers):
+    """SPI mode 0, the highest bit first: CS (idle high), the clock (idle low) and MOSI, which changes between
+    clock edges."""
+    cs, clk, mosi, level, t = [], [], [], 0, start
+    for transfer in transfers:
+        cs.append(t)
+        t += half
+        for byte in transfer:
+            for i in range(7, -1, -1):
+                if byte >> i & 1 != level:
+                    mosi.append(t + half // 2)
+                    level ^= 1
+                clk += [t + half, t + 2 * half]
+                t += 2 * half
+        t += half
+        cs.append(t)
+        t += 20 * half
+    return cs, clk, mosi
+
 
 
 class Words(unittest.TestCase):
@@ -143,6 +212,22 @@ class Words(unittest.TestCase):
         runs = [(1, 3), (0xABCD, 2), (0, 70000)]
         raw = b"".join(W.sample_bytes(*zip(*runs)))
         self.assertEqual(list(struct.unpack("<%dH" % (len(raw) // 2), raw)), samples_of(*zip(*runs)))
+
+    def test_runs_made_from_edges_and_the_edges_kept(self):
+        # a file holds each channel's edges, and its runs are made from them only when they are asked for
+        rng = random.Random(21)
+        for trial in range(40):
+            runs = random_runs(rng, rng.randrange(1, 80), rng.choice((3, 300, 70000)))
+            if trial % 4 == 0:                  # only A0 changes: its edges are in order as they are
+                runs = [(i & 1, n) for i, (_, n) in enumerate(runs)]
+            cap = Capture(1e6, array("H", [v for v, _ in runs]), array("Q", [n for _, n in runs]))
+            edges = cap.edges()
+            self.assertIs(cap.edges(), edges)                       # worked out once
+            self.assertEqual({e.typecode for _, e in edges}, {"I"})
+            self.assertEqual(samples_of(*C._runs_of_edges(edges, cap.samples)), samples_of(cap.values, cap.lengths))
+        self.assertEqual(Capture(1e6, array("H", [0, 1]), array("Q", [1 << 32, 5])).edges()[0][1].typecode, "Q")
+        data = coded([(5, 3), (6, 70000)], "rle")
+        self.assertEqual(W.samples_held(memoryview(data)[4:], "rle"), 70000)     # a part of the words, not copied
 
 
 def trigger_sample(samples, stages):
@@ -236,6 +321,17 @@ class Triggers(unittest.TestCase):
         self.assertEqual([T.ring_words(n, "rle", 8184) for n in (0, 1, 5000, 10 ** 9)], [0, 1, 5000, 8184])
         self.assertEqual([T.ring_words(n, "raw", 8184) for n in (0, 1, 5001, 10 ** 9)], [1, 2, 2502, 8184])
 
+    def test_words_in_any_case_and_a_pulse_shorter_than_a_sample(self):
+        self.assertEqual(T.parse("A0=1 FOR 2us", 10e6), T.parse("A0=1 for 2us", 10e6))
+        self.assertEqual(T.parse("a0=0 Pulse 1us..2us", 10e6), T.parse("A0=0 pulse 1us..2us", 10e6))
+        with self.assertRaises(T.TriggerError) as caught:
+            T.parse("A0=0 pulse ..50ns", 10e6)
+        self.assertEqual(str(caught.exception), "A pulse of 50ns is shorter than one sample, which is 100 ns at "
+                                                "10 MS/s: give a longer time, or capture faster.")
+        self.assertEqual(T.parse("A0=0 pulse ..50ns", 200e6)[0]["max"], 10)
+        with self.assertRaisesRegex(T.TriggerError, "longest time is shorter than its shortest"):
+            T.parse("A0=0 pulse 2us..1us", 10e6)
+
 
 class Files(unittest.TestCase):
     def setUp(self):
@@ -300,6 +396,236 @@ class Files(unittest.TestCase):
     def test_other_endings_are_refused(self):
         with self.assertRaises(ValueError):
             self.cap.save(self.path("a.txt"))
+
+    def test_sigrok_session_comes_back_as_it_was(self):
+        self.cap.names[3] = "SCL"
+        for cap in (self.cap, Capture.from_words(W.words_of_runs(self.cap.values, self.cap.lengths, "raw"), "raw",
+                                                 25e6, len(self.want))):
+            cap.names[3] = "SCL"
+            cap.save(self.path("a.sr"))
+            back = Capture.load(self.path("a.sr"))
+            self.assertEqual(samples_of(back.values, back.lengths), self.want)
+            self.assertEqual((back.rate, back.samples, back.names[3], back.names[4]), (25e6, len(self.want), "SCL", "A4"))
+            self.assertTrue(all(x != y for x, y in zip(back.values, back.values[1:])))      # no run in two pieces
+
+    def test_sigrok_session_of_another_program(self):
+        # one byte a sample, 12.5 kHz, eight probes of which two have names, and the samples in one file
+        rng = random.Random(8)
+        data = bytes(rng.choice((0, 0, 0, 1, 3, 0x80)) for _ in range(5001))
+        meta = ("[global]\nsigrok version=0.5.1\n\n[device 1]\ncapturefile=logic-1\ntotal probes=8\n"
+                "samplerate=12.5 kHz\nprobe1=D0\nprobe8=CS\nunitsize=1\n")
+        with zipfile.ZipFile(self.path("b.sr"), "w") as z:
+            z.writestr("version", "2")
+            z.writestr("metadata", meta)
+            z.writestr("logic-1", data)
+        back = Capture.load(self.path("b.sr"))
+        self.assertEqual((back.rate, back.samples, back.names[0], back.names[7], back.names[8]), (12500, 5001, "D0", "CS", "B0"))
+        self.assertEqual(samples_of(back.values, back.lengths), list(data))
+        with zipfile.ZipFile(self.path("c.sr"), "w") as z:
+            z.writestr("metadata", meta)
+        with self.assertRaisesRegex(ValueError, "no logic samples"):
+            Capture.load(self.path("c.sr"))
+        with open(self.path("d.txt"), "w") as f:
+            f.write("not a capture")
+        with self.assertRaisesRegex(ValueError, "d.txt is not a capture file: this software reads .lb16 files"):
+            Capture.load(self.path("d.txt"))
+
+    def test_an_lb16_file_holds_2_to_the_32_samples(self):
+        long = Capture(200e6, array("H", [0, 1]), array("Q", [(1 << 32) - 1, 6]))           # it changes at 2^32 - 1
+        long.save(self.path("e.lb16"))
+        self.assertEqual(Capture.load(self.path("e.lb16")).samples, (1 << 32) + 5)
+        longer = Capture(200e6, array("H", [0, 1]), array("Q", [1 << 32, 5]))                # and here at 2^32
+        with self.assertRaisesRegex(C.TooLong, r"holds 2\^32 samples at most \(21.5 s at this rate\)"):
+            longer.save(self.path("f.lb16"))
+
+    def test_an_lb16_file_is_read_as_it_is(self):
+        self.cap.save(self.path("a.lb16"))
+        back = Capture.load(self.path("a.lb16"))
+        back.summary()
+        self.assertIsNone(back._runs)                               # its edges were enough: no runs were made
+        self.assertEqual([(i, list(e)) for i, e in back.edges()], [(i, list(e)) for i, e in self.cap.edges()])
+        self.assertEqual(samples_of(back.values, back.lengths), self.want)
+
+    def test_what_is_not_a_capture_is_told_plainly(self):
+        self.cap.save(self.path("a.lb16"))
+        with open(self.path("a.lb16"), "rb") as f:
+            good = f.read()
+        n = struct.unpack_from("<I", good, 8)[0]
+        head, tail = json.loads(good[12:12 + n]), good[12 + n:]
+
+        def lb16(head, tail=b""):
+            text = json.dumps(head).encode()
+            text += b" " * (-(12 + len(text)) % 4)
+            return C.MAGIC + struct.pack("<I", len(text)) + text + tail
+        bad = {"empty.lb16": b"", "magic.lb16": C.MAGIC, "short.lb16": good[:-4], "head.lb16": good[:12 + n // 2],
+               "json.lb16": C.MAGIC + struct.pack("<I", 4) + b"{{{{", "keys.lb16": lb16({"sampleRate": 1e6}),
+               "rate.lb16": lb16(dict(head, sampleRate=0), tail), "past.lb16": lb16(dict(head, numSamples=3), tail),
+               "level.lb16": lb16(dict(head, channels=[dict(c, initial=2) for c in head["channels"]]), tail),
+               "zip.sr": b"PK\x03\x04 and then not a zip file", "text.lb16": b"just some words"}
+        for name, data in bad.items():
+            with open(self.path(name), "wb") as f:
+                f.write(data)
+            with self.assertRaises(ValueError) as caught:
+                Capture.load(self.path(name))
+            self.assertTrue(str(caught.exception).startswith(self.path(name) + " is not a capture file"),
+                            (name, str(caught.exception)))
+        with zipfile.ZipFile(self.path("other.sr"), "w") as z:
+            z.writestr("readme.txt", "a zip file of something else")
+        with self.assertRaisesRegex(ValueError, "other.sr is not a capture file: it is a zip file, and not a sigrok "
+                                                "session that can be read"):
+            Capture.load(self.path("other.sr"))
+        with self.assertRaisesRegex(ValueError, "is a folder, not a capture file"):
+            Capture.load(self.dir.name)
+        for name in ("short.lb16", "other.sr"):     # the command line says so in one line, with no traceback
+            out, err = io.StringIO(), io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                code = cli.main(["show", self.path(name)])
+            self.assertEqual((code, err.getvalue().count("\n")), (1, 1), err.getvalue())
+            self.assertIn("is not a capture file", err.getvalue())
+        # a file with fewer than 16 channels: the others are low
+        count = sum(c["edges"] for c in head["channels"][:3])
+        with open(self.path("few.lb16"), "wb") as f:
+            f.write(lb16(dict(head, channels=head["channels"][:3]), tail[:4 * count]))
+        back = Capture.load(self.path("few.lb16"))
+        self.assertEqual(samples_of(back.values, back.lengths), [v & 7 for v in self.want])
+
+    def test_the_apps_files(self):
+        # Until now the app wrote a capture's settings under info["meta"] (web/app.js), and its trigger sample in
+        # the header's "trigger" (0 for none).  Both are read, as well as this software's own layout
+        edges = self.cap.edges()
+        meta = {"state": "done", "got": 1, "want": 1, "bytes": 1000, "rate": 25e6, "samples": len(self.want),
+                "asked": 5000, "test": False, "thresholds": [1.2, 0.8], "overflow": True, "stopped": "timeout",
+                "problems": ["one"], "usb": "480 Mbit/s", "words": 250, "trigger": "A1=f", "trigger_sample": 120,
+                "clock": None, "glitch_ns": [0] * 16, "pi": None}
+        for info, header, want in (({"meta": meta}, 120, 120), ({"meta": dict(meta, trigger_sample=None)}, 0, None),
+                                   ({}, 77, 77), (None, 0, None)):
+            head = {"sampleRate": 25e6, "numSamples": len(self.want), "trigger": header, "source": "Logic Boole 16",
+                    "info": info, "gaps": [], "channels": [{"initial": i, "edges": len(e)} for i, e in edges],
+                    "names": ["SDA", "SCL"] + [""] * 14, "analyzers": []}
+            text = json.dumps(head).encode()
+            text += b" " * (-(12 + len(text)) % 4)
+            with open(self.path("app.lb16"), "wb") as f:
+                f.write(C.MAGIC + struct.pack("<I", len(text)) + text)
+                for _, e in edges:
+                    f.write(struct.pack("<%dI" % len(e), *e))
+            back = Capture.load(self.path("app.lb16"))
+            self.assertEqual(samples_of(back.values, back.lengths), self.want)
+            self.assertEqual((back.trigger, back.names[:3], back.info["source"]), (want, ["SDA", "SCL", "A2"],
+                                                                                  "Logic Boole 16"))
+            if info:
+                self.assertEqual((back.thresholds, back.overflow, back.stopped, back.problems),
+                                 ([1.2, 0.8], True, "timeout", ["one"]))
+                self.assertEqual((back.info["trigger"], back.info["samples_asked"], back.info["usb"],
+                                  back.info["words"]), ("A1=f", 5000, "480 Mbit/s", 250))
+                self.assertNotIn("meta", back.info)
+            else:
+                self.assertEqual((back.thresholds, back.overflow, back.stopped, back.problems), (None, False, None, []))
+        back.trigger = 120                  # saved again, it is in this software's layout, and reads back the same
+        back.save(self.path("again.lb16"))
+        again = Capture.load(self.path("again.lb16"))
+        self.assertEqual((again.trigger, again.names[:2], samples_of(again.values, again.lengths)),
+                         (120, ["SDA", "SCL"], self.want))
+
+    def test_a_sigrok_session_keeps_what_it_has_no_place_for(self):
+        cap = Capture(25e6, self.cap.values, self.cap.lengths, thresholds=(1.65, 0.9), trigger=1234, overflow=True,
+                      problems=["x"], info={"usb": "5 Gbit/s", "trigger": "B0=r"})
+        cap.save(self.path("t.sr"))
+        with zipfile.ZipFile(self.path("t.sr")) as z:
+            self.assertEqual(z.namelist(), ["version", "metadata", "logic-1-1", "logicboole"])
+            kept = json.loads(z.read("logicboole"))
+            parts = {n: z.read(n) for n in z.namelist()}
+        self.assertEqual((kept["trigger_sample"], kept["thresholds"]), (1234, [1.65, 0.9]))
+        back = Capture.load(self.path("t.sr"))
+        self.assertEqual((back.trigger, back.thresholds, back.overflow, back.problems, back.info["trigger"]),
+                         (1234, [1.65, 0.9], True, ["x"], "B0=r"))
+        self.assertEqual(samples_of(back.values, back.lengths), self.want)
+        # what is not this software's in that part is passed over
+        for other in (b"not json", json.dumps({"trigger_sample": 10 ** 12, "thresholds": "high"}).encode()):
+            with zipfile.ZipFile(self.path("u.sr"), "w") as z:
+                for name, data in parts.items():
+                    z.writestr(name, other if name == "logicboole" else data)
+            back = Capture.load(self.path("u.sr"))
+            self.assertEqual((back.trigger, back.thresholds, len(back.values)), (None, None, len(self.cap.values)))
+
+    def test_csv_times_tell_each_sample_apart(self):
+        # 10 s into a 200 MS/s capture, a time needs 11 figures to name its sample
+        cap = Capture(200e6, array("H", [0, 1, 0]), array("Q", [2000000001, 1, 5]))
+        cap.save(self.path("late.csv"))
+        with open(self.path("late.csv")) as f:
+            times = [row.split(",")[0] for row in f.read().split("\n")[1:-1]]
+        self.assertEqual(times, ["0.0000000000", "10.0000000050", "10.0000000100"])
+        self.assertEqual([round(float(t) * 200e6) for t in times], [0, 2000000001, 2000000002])
+
+
+class Revisions(unittest.TestCase):
+    """What differs between the board's revisions: the scale of its thresholds.  Each check is made for every
+    revision the software knows, and for one made up for the tests."""
+
+    def setUp(self):
+        patched = unittest.mock.patch.dict(B.REVISIONS, {MADE_UP.name: MADE_UP})
+        patched.start()
+        self.addCleanup(patched.stop)
+
+    def test_volts_and_duty_cycles(self):
+        for name, rev in B.REVISIONS.items():
+            with self.subTest(name):
+                for v in (rev.low, 0.9, 1.65, rev.high):
+                    self.assertLessEqual(abs(rev.volts(rev.duty_for(v)) - v), rev.step / 2 + 1e-12)
+                self.assertTrue(rev.low < B.START_THRESHOLD < rev.high)
+                self.assertGreaterEqual(rev.volts(4095), rev.high)          # the whole range can be set
+                for v in (-0.1, rev.full_scale * 1.01):
+                    with self.assertRaisesRegex(B.BoardError, "A threshold is 0 ... "):
+                        rev.duty_for(v)
+        self.assertEqual(B.REVISIONS["V1.0.0"].duty_for(B.START_THRESHOLD), 2048)    # where its designs start
+        self.assertNotEqual(MADE_UP.duty_for(B.START_THRESHOLD), 2048)
+
+    def test_names(self):
+        self.assertIs(B.revision_of(), B.REVISIONS[B.DEFAULT_REVISION])
+        for name in ("V1.0.0", "1.0.0", "v1.0.0", B.REVISIONS["V1.0.0"]):
+            self.assertIs(B.revision_of(name), B.REVISIONS["V1.0.0"])
+        with self.assertRaisesRegex(B.BoardError, "V9.9.9 is not a revision of the board this software knows: V1.0.0"):
+            B.revision_of("V9.9.9")
+
+    def test_a_board_starts_at_the_same_voltage_and_keeps_its_thresholds(self):
+        for name, rev in B.REVISIONS.items():
+            with self.subTest(name):
+                bus = fake.FakeBus(instant=True)
+                duties = lambda: struct.unpack("<HH", bus.reg[0x0C:0x10])          # noqa: E731
+                with B.connect(backend=bus, revision=name) as board:
+                    self.assertIs(board.revision, rev)
+                    start = rev.duty_for(B.START_THRESHOLD)
+                    self.assertEqual(duties(), (start, start))
+                    for v in board.thresholds():
+                        self.assertLessEqual(abs(v - B.START_THRESHOLD), rev.step)
+                    a, b = board.set_thresholds(1.65, 0.9)
+                    self.assertEqual(duties(), (rev.duty_for(1.65), rev.duty_for(0.9)))
+                    self.assertEqual((round(a, 3), round(b, 3)), (round(rev.volts(rev.duty_for(1.65)), 3),
+                                                                  round(rev.volts(rev.duty_for(0.9)), 3)))
+                    board.capture_fast("A0-A3", seconds=1e-4)              # the other design is loaded ...
+                    self.assertEqual(duties(), (rev.duty_for(1.65), rev.duty_for(0.9)))
+                    cap = board.capture(rate=1e6, seconds=1e-3)             # ... and this one again
+                    self.assertEqual(duties(), (rev.duty_for(1.65), rev.duty_for(0.9)))
+                    self.assertEqual(cap.thresholds, (round(a, 3), round(b, 3)))
+                    # a threshold outside what the board is made for is refused, and nothing changes
+                    with self.assertRaises(B.BoardError) as caught:
+                        board.set_thresholds(rev.high + 0.1)
+                    self.assertEqual(str(caught.exception),
+                                     "A threshold of %.3g V is outside what the board takes, %g V to %g V: set it to "
+                                     "about half your logic voltage, for example 1.65 V for 3.3 V logic."
+                                     % (rev.high + 0.1, rev.low, rev.high))
+                    with self.assertRaisesRegex(B.BoardError, "outside what the board takes"):
+                        board.set_thresholds(1.0, rev.low - 0.05)
+                    self.assertEqual(duties(), (rev.duty_for(1.65), rev.duty_for(0.9)))
+                    self.assertEqual(board.set_thresholds(rev.low, rev.high),     # the ends are taken
+                                     (rev.volts(rev.duty_for(rev.low)), rev.volts(rev.duty_for(rev.high))))
+                    board.set_thresholds(1.65, 0.9)
+                    with self.assertRaisesRegex(B.BoardError, "A threshold is 0 ... %.2f V" % rev.volts(4095)):
+                        rev.duty_for(rev.full_scale * 1.1)          # the outer check: what the PWM can make
+                found = B.look(bus, revision=name)
+                self.assertEqual((found["revision"], found["threshold_range"], found["threshold_a"]),
+                                 (rev.name, [rev.low, rev.high], round(a, 3)))
+                B.connect(backend=bus, revision=name, reload=True).close()  # "logicboole load": the design again
+                self.assertEqual(duties(), (start, start))
 
 
 class TheBoard(unittest.TestCase):
@@ -678,15 +1004,66 @@ class TheBoard(unittest.TestCase):
             self.assertTrue(board.capture(rate=100e6, samples=2000000, test=4).ok)
 
     def test_a_board_in_use_is_left_alone(self):
+        # another program is capturing, and still has the board: it is left alone, and what is said names the
+        # way out
         bus = self.bus()
         with B.connect(backend=bus) as board:
-            bus.stream = True
-            self.assertEqual(B.look(bus)["state"], "inuse")
-            with self.assertRaisesRegex(B.BoardError, "capture is running"):
+            bus.leave_running(held=True)
+            found = B.look(bus)
+            self.assertEqual(found["state"], "inuse")
+            self.assertEqual(found["text"], B.IN_USE)
+            self.assertIn('"logicboole load" takes the board back from it', found["text"])
+            self.assertIn("unplugging the board and plugging it in again", found["text"])
+            with self.assertRaisesRegex(B.BoardError, "^Another program is capturing from the board.*logicboole load"):
                 board.capture()
-            bus.stream, bus.claimed = False, True
-            with self.assertRaisesRegex(B.BoardError, "has the board open"):
+            with self.assertRaisesRegex(B.BoardError, "^Another program is capturing"):
+                board.capture_fast("A")
+            with self.assertRaisesRegex(B.BoardError, "^Another program is capturing"):
+                board.use("fast")
+        loads = len([r for r in bus.requests if r[0] in (0xB3, 0xB7)])
+        lines = []
+        with B.connect(backend=bus, log=lines.append) as board:    # connect() does not refuse, nor load anything
+            self.assertEqual(board.inputs() & 3, bus.registers()[6] & 3)
+        self.assertEqual(lines, [])
+        self.assertEqual(len([r for r in bus.requests if r[0] in (0xB3, 0xB7)]), loads)
+        self.assertTrue(bus.run and bus.stream and bus.claimed)
+        # "logicboole load" takes the board back
+        with B.connect(backend=bus, reload=True) as board:
+            self.assertFalse(bus.run or bus.stream or bus.claimed)
+            self.assertTrue(board.capture(rate=10e6, seconds=1e-3).ok)
+        # a program that has the board open, and is not capturing
+        bus.claimed = True
+        with B.connect(backend=bus) as board:
+            with self.assertRaisesRegex(B.BoardError, "^Another program has the board open.*plugging it in again"):
                 board.capture()
+        self.assertTrue(bus.claimed)                                # (its hold was not let go)
+
+    def test_a_capture_left_running_is_stopped(self):
+        # a program that has ended left a capture running: the system has let go of the board, so the capture
+        # is stopped, with one line, wherever the board is next used
+        bus, lines = self.bus(), []
+        with B.connect(backend=bus) as board:
+            bus.leave_running()
+            found = B.look(bus, log=lines.append)
+            self.assertEqual((found["state"], found["note"]), ("ready", B.STALE))
+            self.assertEqual(lines, [B.STALE])
+            self.assertFalse(bus.run or bus.stream or bus.claimed)
+            self.assertEqual(B.STALE, "A capture was left running by a program that has ended; stopped it.")
+            bus.leave_running()
+            self.assertTrue(board.capture(rate=10e6, seconds=1e-3).ok)
+            bus.leave_running()
+            self.assertTrue(board.capture_fast("A", seconds=1e-5).ok)
+            bus.leave_running()
+            board.use("standard")
+            self.assertFalse(bus.run or bus.stream or bus.claimed)
+        bus.leave_running()
+        lines = []
+        with B.connect(backend=bus, log=lines.append) as board:
+            self.assertEqual(lines, [B.STALE])
+            bus.leave_running()
+            self.assertTrue(board.capture(rate=10e6, seconds=1e-3).ok)
+        self.assertEqual(lines, [B.STALE] * 2)
+        self.assertNotIn(0xB7, [r[0] for r in bus.requests])      # nothing was loaded again for it
 
     def test_selftest(self):
         lines = []
@@ -704,14 +1081,17 @@ class TheBoard(unittest.TestCase):
             self.assertFalse(selftest(board, log=lines.append, scale=0.002))
         self.assertEqual(len([line for line in lines if "WRONG: it overflowed" in line]), 2)
         self.assertEqual(len([line for line in lines if "as meant" in line]), 3)
-        self.assertEqual(len([line for line in lines if "WRONG: overflow after the trigger" in line]), 7)
+        # an overflow after a trigger is the computer's (or the link's), as in the plain captures: not a fault
+        self.assertEqual(len([line for line in lines if "the right one" in line
+                              and line.endswith("; OVERFLOW after the trigger")]), 7)
+        self.assertEqual([line for line in lines if "WRONG" in line and "it overflowed" not in line], [])
         # the same on a USB 2.0 link: the captures that make more words than it carries may overflow, with or
         # without a trigger, and the last line says how many did
         lines, bus = [], fake.FakeBus(instant=True, overflow_at=10000)
         bus.link = 2
         with B.connect(backend=bus) as board:
             self.assertFalse(selftest(board, log=lines.append, scale=0.002))
-        self.assertEqual(len([line for line in lines if "WRONG: overflow after the trigger" in line]), 4)
+        self.assertEqual(len([line for line in lines if line.endswith("; OVERFLOW after the trigger")]), 4)
         self.assertEqual(len([line for line in lines if "the right one" in line and "more than USB 2.0" in line]), 3)
         self.assertIn("The link is USB 2.0 (480 Mbit/s): ", lines[-1])
         lines, bus = [], fake.FakeBus(instant=True)
@@ -743,6 +1123,151 @@ class TheBoard(unittest.TestCase):
         self.assertFalse(ended(1 << 20, 1 << 20, 1024))         # a full read says nothing
         self.assertTrue(ended(512, 1 << 20, 512))               # USB 2.0: packets of 512 bytes
         self.assertFalse(ended(512, 1 << 20, 1024))
+
+    def test_versions_that_differ_are_loaded_again(self):
+        # a board that stayed powered while the software was upgraded runs the versions it had
+        bus = self.bus()
+        B.connect(backend=bus).close()
+        bus.firmware_version = 1
+        lines = []
+        with B.connect(backend=bus, log=lines.append) as board:
+            self.assertEqual(board.status()["version"], B.FIRMWARE_VERSION)
+        self.assertEqual(lines[0], "The board runs firmware version 1; this software comes with version 2: loading it.")
+        firmware = len([r for r in bus.requests if r[0] == 0xB7])
+        bus.versions["standard"] = 4
+        lines = []
+        with B.connect(backend=bus, log=lines.append) as board:
+            self.assertEqual(board.registers()["version"], 5)
+        self.assertEqual(lines[0], "The board's FPGA runs version 4 of the standard design; this software comes with "
+                                   "version 5: loading the standard design.")
+        self.assertEqual(len([r for r in bus.requests if r[0] == 0xB7]), firmware)     # only the FPGA was loaded
+        with B.connect(backend=bus) as board:
+            board.use("fast")
+        bus.versions["fast"] = 0
+        lines = []
+        with B.connect(backend=bus, log=lines.append) as board:
+            self.assertEqual(board.registers()["design"], "standard")
+        self.assertIn("runs version 0 of the fast design; this software comes with version 1", lines[0])
+        loads, lines = len([r for r in bus.requests if r[0] in (0xB3, 0xB7)]), []
+        B.connect(backend=bus, log=lines.append).close()            # the same versions: nothing is loaded
+        self.assertEqual((lines, len([r for r in bus.requests if r[0] in (0xB3, 0xB7)])), ([], loads))
+        # a bitstream of one's own is loaded as it is, and its version is not compared
+        with tempfile.TemporaryDirectory() as folder:
+            own = os.path.join(folder, "own.bin")
+            with open(B.GATEWARE, "rb") as f, open(own, "wb") as g:
+                g.write(f.read() + b"built here")
+            bus.versions["standard"] = 4
+            B.connect(backend=bus, log=lines.append, gateware=own).close()
+            self.assertEqual((lines, bus.versions["standard"]), ([], 4))
+        # and nothing is loaded while another program is capturing from the board
+        bus.firmware_version = 1
+        bus.leave_running(held=True)
+        B.connect(backend=bus, log=lines.append).close()
+        self.assertEqual((lines, bus.firmware_version, bus.versions["standard"], bus.run), ([], 1, 4, True))
+
+    def test_usb_failures_are_told_plainly(self):
+        bus = self.bus()
+        with B.connect(backend=bus) as board:
+            bus.fail[0xB0] = -7                                     # the status request times out
+            with self.assertRaisesRegex(B.BoardError, r"^The board did not answer when asked for its status "
+                                                      r"\(libusb -7\)\.  Unplug it and plug it in again\.$"):
+                board.status()
+            self.assertEqual(B.look(bus)["state"], "other")
+            bus.fail[0xB0] = -9                                     # it does not know the request: other firmware
+            with self.assertRaisesRegex(B.BoardError, "^A device with the board's USB IDs runs other firmware"):
+                board.status()
+            del bus.fail[0xB0]
+            bus.fail[0xD0] = -9
+            with self.assertRaisesRegex(B.BoardError, r"^The firmware refused writing the FPGA's register 0C "
+                                                      r"\(request D0, libusb -9\)\.$"):
+                board.set_thresholds(1.0)
+            del bus.fail[0xD0]
+            bus.stage = "none"                                      # unplugged
+            for what in (board.status, board.inputs, lambda: board.set_thresholds(1.0), board.capture,
+                         lambda: board.capture_fast("A")):
+                with self.assertRaises(B.Gone) as caught:
+                    what()
+                self.assertEqual(str(caught.exception), "The board left USB (unplugged, the cable, or a hub).  Connect "
+                                                        "it again and run the command again: the board is loaded again "
+                                                        "by itself.")
+        self.assertEqual(B.look(bus)["state"], "none")
+
+    def test_a_board_that_leaves_usb_during_a_capture(self):
+        # what arrived is kept, whole up to its last sample, and the problems say what happened
+        bus = self.bus()
+        with B.connect(backend=bus) as board:
+            bus.leave_after = 300000
+            cap = board.capture(rate=10e6, seconds=1, test=4)
+            self.assertEqual(cap.problems, ["the board left USB after 1048576 bytes: what arrived is kept, but could "
+                                            "not be checked against what the FPGA sent"])
+            start = round(board.volts(board.duty_for(B.START_THRESHOLD)), 3)
+            self.assertEqual((cap.samples, cap.thresholds), (262144 * 16, (start, start)))
+            self.assertIsNone(W.check_pattern(cap.words, "rle", 4, cap.samples))
+        self.assertEqual(B.look(bus)["state"], "none")
+        bus = self.bus()
+        with B.connect(backend=bus) as board:
+            board.use("fast")
+            bus.leave_after = 300000
+            cap = board.capture_fast("all", seconds=0.05, fmt="raw")
+            self.assertEqual(cap.problems, [B.GONE_PROBLEM % 1048576])
+            self.assertEqual(cap.samples, 262144 * 2 * F.mode_of("all").per)
+        # with a trigger, nothing but the board says where the trigger sample is: nothing is kept
+        bus = self.bus()
+        with B.connect(backend=bus) as board:
+            bus.leave_after = 300000
+            with self.assertRaises(B.Gone) as caught:
+                board.capture(rate=10e6, seconds=1, fmt="raw", trigger="A1=f")
+        self.assertIn("during the capture, after 1048576 bytes had arrived: a capture with a trigger is kept only if "
+                      "the board can say where its trigger sample is", str(caught.exception))
+        # a read that fails while the board stays: what arrived before it is kept, and the problems say so
+        bus = self.bus()
+        with B.connect(backend=bus) as board:
+            bus.read_fails_after = 300000
+            cap = board.capture(rate=10e6, seconds=1, test=4)
+            self.assertEqual(cap.problems[0], "reading from the board failed after 1048576 bytes (error)")
+            self.assertIn("262144 words arrived, the FPGA sent", cap.problems[1])
+            self.assertIsNone(W.check_pattern(cap.words, "rle", 4, cap.samples))
+            self.assertFalse(bus.run or bus.stream or bus.claimed)
+            bus.read_fails_after = None
+            self.assertTrue(board.capture(rate=10e6, seconds=0.01, test=4).ok)     # and the next one is whole
+
+    def test_a_capture_is_held_to_the_computers_memory(self):
+        # a 32nd of the memory, and 16 MB at the least: as the fast design's captures are
+        with unittest.mock.patch.object(B, "memory", return_value=256 << 20):
+            with B.connect(backend=self.bus()) as board:
+                cap = board.capture(rate=200e6, seconds=0.1, fmt="raw")
+        self.assertEqual(cap.stopped, "size")
+        self.assertTrue(cap.ok, cap.problems)
+        self.assertTrue(16 << 20 <= cap.info["words"] * 4 < 40 << 20, cap.info["words"])
+
+    def test_ctrl_c_inside_libusbs_callback_is_not_lost(self):
+        # Python prints a Ctrl-C that comes while libusb runs a ctypes callback, and goes on as if none had come
+        class Lib:
+            def libusb_submit_transfer(self, tp):
+                return 0
+
+            def libusb_handle_events_timeout_completed(self, *args):
+                pass
+
+        def sink(view):
+            raise KeyboardInterrupt
+        r = usb.Reader.__new__(usb.Reader)
+        r.lib, r.ctx, r._tv, r.sink, r.packet = Lib(), None, usb._Timeval(), sink, 512
+        r.pending, r.bytes, r.short_reads, r.failed, r.failure, r.sink_error = 1, 0, 0, 0, None, None
+        r.ending = r.ended = r.stopping = r.interrupted = False
+        buf = (ctypes.c_ubyte * 1024)()
+        t = usb._Transfer(status=usb.COMPLETED, length=1024, actual_length=1024, buffer=ctypes.addressof(buf))
+        usb._CALLBACK(r._done)(ctypes.pointer(t))                   # through ctypes, as libusb calls it
+        self.assertTrue(r.interrupted)
+        with self.assertRaises(KeyboardInterrupt):
+            r.pump(1)
+        self.assertFalse(r.interrupted)
+        r.pump(1)
+
+    def test_windows_is_told_plainly(self):
+        with unittest.mock.patch.object(usb, "_lib", None), unittest.mock.patch.object(usb.sys, "platform", "win32"):
+            with self.assertRaisesRegex(usb.UsbError, "^Windows is not supported yet"):
+                usb.library()
 
 
 class TheApp(unittest.TestCase):
@@ -855,6 +1380,39 @@ class TheApp(unittest.TestCase):
             self.assertEqual(code, 400, q)
             self.assertIn(why, said["error"], q)
         self.assertEqual(json.loads(self.get("/api/status"))["capture"]["samples"], 310)     # the refused ones changed nothing
+
+    def test_the_board_says_its_revision_and_range(self):
+        s = self.wait(lambda s: s["board"]["state"] == "ready")
+        self.assertEqual((s["board"]["revision"], s["board"]["threshold_range"]), ("V1.0.0", [0.3, 3.0]))
+
+    def test_only_requests_that_name_this_computer(self):
+        # a page elsewhere that points a name of its own at this computer (DNS rebinding) is refused
+        port = self.httpd.server_address[1]
+        for host in ("evil.example", "evil.example:%d" % port, "", "localhost.evil.example"):
+            for data in (None, b""):
+                req = urllib.request.Request(self.url + "/api/status", data=data,
+                                             headers={"Host": host, "X-LB16": "1"})
+                with self.assertRaises(urllib.error.HTTPError) as caught:
+                    urllib.request.urlopen(req)
+                with caught.exception as e:
+                    self.assertEqual(e.code, 403, host)
+                    self.assertIn("http://localhost:%d" % port, json.loads(e.read())["error"])
+        for host in ("localhost:%d" % port, "127.0.0.1:%d" % port, "LOCALHOST"):
+            req = urllib.request.Request(self.url + "/api/status", headers={"Host": host})
+            with urllib.request.urlopen(req) as r:
+                self.assertEqual(r.status, 200, host)
+
+    def test_names_a_request_may_give(self):
+        here = server.names_for("127.0.0.1")
+        for header, ok in (("localhost:8016", True), ("127.0.0.1:8016", True), ("[::1]:8016", True),
+                           ("192.168.1.20:8016", True), ("::1", True), ("evil.example", False), ("", False),
+                           (None, False), ("[evil.example]:8016", False), (socket.gethostname(), False)):
+            self.assertEqual(server.host_ok(header, here), ok, header)
+        lan = server.names_for("0.0.0.0")                  # served to other computers: its own name too
+        base = socket.gethostname().lower().split(".")[0]
+        for header in (base, base + ".local:8016", socket.gethostname()):
+            self.assertTrue(server.host_ok(header, lan), header)
+        self.assertFalse(server.host_ok("evil.example", lan))
 
     def test_pages_and_nothing_outside_them(self):
         self.assertIn(b"LOGIC BOOLE 16", self.get("/"))
@@ -1130,14 +1688,29 @@ class Decoders(unittest.TestCase):
         with self.assertRaisesRegex(D.DecodeError, "stopped"):
             D.decode(path, "i2c scl=A1 sda=A0", cancel=lambda: True)
 
+    def test_a_quiet_sigrok_cli_is_stopped_when_asked(self):
+        # one that prints nothing for a long while: the app's Cancel and its time limit stop it all the same
+        with open(self.path("quiet"), "w", encoding="utf-8") as f:
+            f.write("#!%s\nimport os, sys, time\nif '-i' in sys.argv:\n    time.sleep(60)\n"
+                    "os.execv(%r, [%r] + sys.argv[1:])\n" % (sys.executable, self.path("sigrok-cli"),
+                                                             self.path("sigrok-cli")))
+        os.chmod(self.path("quiet"), 0o755)
+        with unittest.mock.patch.dict(os.environ, {D.ENV: self.path("quiet")}):
+            t0 = time.monotonic()
+            with self.assertRaisesRegex(D.DecodeError, "The decoders were stopped."):
+                D.decode(self.path("a.lb16"), "i2c scl=A1 sda=A0", cancel=lambda: time.monotonic() >= t0 + 0.5)
+            self.assertLess(time.monotonic() - t0, 3)
+
     def test_a_capture_with_its_own_names_and_a_session_file(self):
         self.cap.save(self.path("named.sr"), ["SDA", "SCL"] + ["D%d" % i for i in range(2, 16)])
         found = D.decode(self.path("named.sr"), "i2c scl=scl sda=SDA")
         self.assertEqual((found["decoders"], found["samples"], found["sample_rate"], found["trigger_sample"]),
                          ("i2c:scl=SCL:sda=SDA", self.cap.samples, 1e6, None))
         self.assertEqual(self.asked()[-2][:2], ["-i", self.path("named.sr")])
-        with self.assertRaisesRegex(D.DecodeError, "no channel A1.  Its channels are D10"):
-            D.decode(self.path("named.sr"), "i2c scl=A1 sda=SDA")
+        # A0 ... B7 are its first 16 channels, as measure takes them
+        self.assertEqual(D.decode(self.path("named.sr"), "i2c scl=A1 sda=a0")["decoders"], "i2c:scl=SCL:sda=SDA")
+        with self.assertRaisesRegex(D.DecodeError, "no channel CLK.  Its channels are D10"):
+            D.decode(self.path("named.sr"), "i2c scl=CLK sda=SDA")
         self.cap.names[5] = "Reset"
         self.cap.save(self.path("named.lb16"))
         self.assertEqual(D.decode(self.path("named.lb16"), "uart rx=reset tx=A6")["decoders"], "uart:rx=A5:tx=A6")
@@ -1252,7 +1825,7 @@ class TheAppsDecoders(unittest.TestCase):
             self.assertIn(why, said["error"], q)
         code, said = self.decode(data=b"not a capture at all", words="i2c scl=A1 sda=A0")
         self.assertEqual(code, 400)
-        self.assertIn("What the page sent is not a Logic Boole capture file", said["error"])
+        self.assertIn("What the page sent is not a capture file", said["error"])
         self.assertNotIn(tempfile.gettempdir(), said["error"])
         self.assertEqual(self.decode(words="i2c scl=A1 sda=A0")[0], 200)    # and the app goes on
 
@@ -1319,7 +1892,8 @@ class TheAgentsServer(unittest.TestCase):
         r = self.ask("tools/list")["result"]
         self.assertEqual(sorted(r), ["tools"])
         self.assertEqual([t["name"] for t in r["tools"]], ["board_info", "set_thresholds", "read_inputs", "capture",
-                                                          "measure", "decode", "list_decoders", "self_test"])
+                                                          "measure", "find", "detect", "plot", "decode",
+                                                          "list_decoders", "self_test", "guide"])
         for t in r["tools"]:
             schema = t["inputSchema"]
             self.assertEqual((schema["type"], schema["additionalProperties"]), ("object", False), t["name"])
@@ -1334,7 +1908,7 @@ class TheAgentsServer(unittest.TestCase):
         self.assertEqual((r["resultType"], r["supportedVersions"][0], r["capabilities"]), ("complete", "2026-07-28", {"tools": {}}))
         self.assertEqual(r["_meta"]["io.modelcontextprotocol/serverInfo"]["name"], "logicboole")
         r = self.ask("tools/list", meta=self.NOW)["result"]
-        self.assertEqual((r["resultType"], len(r["tools"])), ("complete", 8))
+        self.assertEqual((r["resultType"], len(r["tools"])), ("complete", 12))
         r = self.ask("tools/call", {"name": "read_inputs", "arguments": {}}, meta=self.NOW)["result"]
         self.assertEqual((r["resultType"], r["isError"]), ("complete", False))
         e = self.ask("tools/list", meta=dict(self.NOW, **{"io.modelcontextprotocol/protocolVersion": "2030-01-01"}))["error"]
@@ -1379,6 +1953,43 @@ class TheAgentsServer(unittest.TestCase):
         self.assertEqual(m["changes"], [[c["time"], c["channel"], c["level"]] for c in back.measure(["A1"], listed=2)["changes"]])
         wrong, second = self.tool("capture", rate=2e6, seconds=0.05)
         self.assertNotEqual(second["file"], cap["file"])
+
+    def raw(self, called, /, **args):
+        return self.ask("tools/call", {"name": called, "arguments": args})["result"]
+
+    def test_names_find_detect_plot_and_the_guide(self):
+        wrong, cap = self.tool("capture", rate=2e6, seconds=0.05, names="A0=SDA,A1=SCL", trigger="SDA=f SCL=1", timeout=5)
+        self.assertEqual((wrong, cap["names"], cap["trigger"], cap["triggered"]), (False, {"A0": "SDA", "A1": "SCL"}, "A0=f A1=1", True))
+        self.assertEqual(Capture.load(cap["file"]).names[:3], ["SDA", "SCL", "A2"])
+        wrong, m = self.tool("measure", file=cap["file"], channels=["scl"])
+        self.assertEqual((wrong, m["channels"][0]["channel"], m["channels"][0]["name"]), (False, "A1", "SCL"))
+        wrong, f = self.tool("find", file=cap["file"], text="SCL=1 for 100us", limit=2)
+        self.assertEqual((wrong, f["find"], len(f["found"])), (False, "A1=1 for 100us", 2))
+        self.assertGreater(f["total"], 2)
+        wrong, d = self.tool("detect", file=cap["file"])
+        self.assertEqual((wrong, d["buses"][0]["decode"], d["channels"][1]["name"]), (False, "i2c scl=A1 sda=A0", "SCL"))
+        self.assertIn("a guess", d["note"])
+        r = self.raw("plot", file=cap["file"], end=0.001, marks=[0.0002], channels=["SDA", "SCL"])
+        self.assertEqual(([c["type"] for c in r["content"]], r["isError"], r["content"][1]["mimeType"]), (["text", "image"], False, "image/png"))
+        info = json.loads(r["content"][0]["text"])
+        w, h, rows = pixels(base64.b64decode(r["content"][1]["data"]))
+        self.assertEqual((w, h, info["channels"], info["marks"]), (1200, info["height"], ["A0", "A1"], [{"mark": 1, "time": 0.0002}]))
+        with open(info["file"], "rb") as f:
+            self.assertEqual(base64.b64encode(f.read()).decode(), r["content"][1]["data"])
+        self.assertNotEqual(json.loads(self.raw("plot", file=cap["file"])["content"][0]["text"])["file"], info["file"])
+        r = self.raw("guide")
+        self.assertEqual(([c["type"] for c in r["content"]], r["isError"]), (["text"], False))
+        self.assertTrue(r["content"][0]["text"].startswith("This guide is the skill file"))
+        self.assertTrue(self.raw("guide", topic="recipes")["content"][0]["text"].startswith("## Recipes"))
+        for called, args, why in (("capture", {"names": "A0=X,A1=X"}, "A0 and A1 would both be named X."),
+                                  ("plot", {"file": cap["file"], "marks": ["1ms"]}, "marks is a list of numbers."),
+                                  ("plot", {"file": cap["file"], "save_as": info["file"]}, "is there already"),
+                                  ("plot", {"file": cap["file"], "save_as": "x.jpg"}, "saved as .png"),
+                                  ("find", {"file": cap["file"], "text": "in=r"}, "TRIG IN is not in a saved capture"),
+                                  ("detect", {"file": os.path.join(self.dir.name, "none.lb16")}, "there is no such file")):
+            wrong, said = self.tool(called, **args)
+            self.assertTrue(wrong, called)
+            self.assertIn(why, said)
 
     def test_a_trigger_and_a_capture_clock(self):
         probes = samples_of(*zip(*fake.probe_runs(0, 100000, 1e6)))
@@ -1451,9 +2062,9 @@ class TheAgentsServer(unittest.TestCase):
                                 ("capture", {"samples": 2.5}, "a whole number"), ("capture", {"raw": "yes"}, "true or false"),
                                 ("capture", {"save_as": "x.sr"}, "a list of texts"), ("capture", {"glitch": "5s"}, "10 ns"),
                                 ("capture", {"pi": "gpio4"}, "the Pi's lines"), ("capture", {"pi": 3}, "pi"),
-                                ("set_thresholds", {}, "a is not given"), ("set_thresholds", {"a": 9}, "A threshold is"),
+                                ("set_thresholds", {}, "a is not given"), ("set_thresholds", {"a": 9}, "A threshold of 9 V is outside what the board takes, 0.3 V to 3 V: set it to about half your logic voltage"),
                                 ("measure", {"file": os.path.join(self.dir.name, "none.lb16")}, "no such file"),
-                                ("measure", {"file": __file__}, "not a Logic Boole capture file"),
+                                ("measure", {"file": __file__}, "test_host.py is not a capture file"),
                                 ("decode", {"file": "x.lb16"}, "decoders is not given")):
             wrong, why_not = self.tool(name, **args)
             self.assertTrue(wrong, (name, args))
@@ -1480,6 +2091,55 @@ class TheAgentsServer(unittest.TestCase):
         self.assertFalse(self.server.is_alive())
         self.assertEqual(os.listdir(self.dir.name), [])                 # neither capture was kept
 
+    def test_save_as_refuses_a_file_that_is_there(self):
+        with tempfile.TemporaryDirectory() as folder:
+            there = os.path.join(folder, "there.sr")
+            with open(there, "w") as f:
+                f.write("kept")
+            wrong, why = self.tool("capture", seconds=0.001, save_as=[there])
+            self.assertEqual((wrong, why), (True, "%s is there already: give overwrite=true to write over it." % there))
+            with open(there) as f:
+                self.assertEqual(f.read(), "kept")
+            self.assertEqual(os.listdir(self.dir.name), [])          # refused before the capture
+            wrong, got = self.tool("capture", seconds=0.001, save_as=[there], overwrite=True)
+            self.assertFalse(wrong, got)
+            self.assertEqual((got["also_saved"], Capture.load(there).samples), ([there], 1000))
+            wrong, why = self.tool("capture", seconds=0.001, save_as=[os.path.join(folder, "none", "x.vcd")])
+            self.assertTrue(wrong)
+            self.assertIn("x.vcd cannot be saved: there is no folder", why)
+        props = mcp.BY_NAME["capture"]["inputSchema"]["properties"]
+        self.assertEqual(props["overwrite"]["type"], "boolean")
+        # the 10 s that a capture waits for its trigger, if no timeout is given, also end one with a capture clock
+        self.assertIn("With a capture clock: seconds the whole capture may take.  10 if not given, for either",
+                      props["timeout"]["description"])
+        self.assertIn("The capture ends after `timeout` (10 seconds if not given) even if it has fewer samples",
+                      props["clock"]["description"])
+
+    def test_a_file_that_cannot_be_written_after_the_capture(self):
+        # the agent is told where the capture is all the same
+        tools = mcp.Tools(fake.FakeBus(instant=True), True, self.dir.name)
+        asked = mcp.Asked(threading.Event(), None, lambda message: None)
+        save = Capture.save
+        with tempfile.TemporaryDirectory() as folder:
+            first, other = os.path.join(folder, "a.sr"), os.path.join(folder, "late.vcd")
+
+            def failing(cap, path, names=None):
+                if path == other:
+                    raise OSError("the disk is full")
+                return save(cap, path, names)
+            with unittest.mock.patch.object(Capture, "save", failing):
+                r = tools.call("capture", {"seconds": 0.001, "save_as": [first, other]}, asked)
+        lb16 = [os.path.join(self.dir.name, n) for n in os.listdir(self.dir.name)]
+        self.assertEqual((r["isError"], len(lb16)), (True, 1))
+        self.assertEqual(r["content"][0]["text"], "The capture is saved as %s and %s, but %s could not be written: the "
+                                                  "disk is full" % (lb16[0], first, other))
+        # an overflow on a USB 2.0 link says so
+        bus = fake.FakeBus(instant=True, overflow_at=500)
+        bus.link = 2
+        r = mcp.Tools(bus, True, self.dir.name).call("capture", {"seconds": 0.01}, asked)
+        self.assertIn("The link runs at 480 Mbit/s, not USB 3's 5 Gbit/s: a USB 3 port and cable carry about nine "
+                      "times as much.", json.loads(r["content"][0]["text"])["overflow"])
+
 
 class TheCommandLine(unittest.TestCase):
     def run_it(self, *words):
@@ -1500,6 +2160,7 @@ class TheCommandLine(unittest.TestCase):
                                          "--before", "2ms", "--glitch", "A=50ns", path)
             self.assertEqual(code, 0, err)
             self.assertIn("trigger (A1=f then A0=r): %.9g s into the capture (sample %d)" % (want / 1e6, want), out)
+            self.assertIn("Waiting for the trigger (A1=f then A0=r).  Ctrl-C stops.\nTriggered.\n", err)
             self.assertIn("glitch filter: A0 50 ns, A1 50 ns", out)
             back = Capture.load(path)
             self.assertEqual((back.trigger, back.samples), (want, want + 20000))
@@ -1508,17 +2169,76 @@ class TheCommandLine(unittest.TestCase):
             self.assertIn("the Pi's lines: A0 is GPIO2 (SDA), A1 is GPIO3 (SCL), B0 is GPIO7 (CE1)", out)
             back = Capture.load(path)
             self.assertEqual((back.names[0], back.names[1], back.names[2], back.names[8]), ("SDA", "SCL", "A2", "CE1"))
+            # the lines' names in the trigger, and a name of one's own beside them (the stand-in's Pi lines are low)
+            code, out, err = self.run_it("capture", "--rate", "1M", "--time", "20ms", "--pi", "i2c", "--name", "B3=IRQ",
+                                         "--trigger", "SCL=0 SDA=0 IRQ=0", "--timeout", "1", path)
+            self.assertEqual(code, 0, err)
+            self.assertIn("trigger (A0=0 A1=0 B3=0): 0 s into the capture (sample 0)", out)
+            self.assertEqual(Capture.load(path).names[:2] + Capture.load(path).names[11:12], ["SDA", "SCL", "IRQ"])
+            code, out, err = self.run_it("capture", "--pi", "i2c", "--name", "B3=SDA", path)
+            self.assertEqual((code, err.strip()), (1, "A0 and B3 would both be named SDA."))
         code, out, err = self.run_it("capture", "--rate", "1M", "--time", "20ms", "--trigger", "A0=f", "--before", "7", "--json")
         got = json.loads(out[out.index("{"):])
         self.assertEqual((code, got["trigger_sample"], got["trigger_seconds"], got["samples"]), (0, 7, 7e-6, 20007))
         code, out, err = self.run_it("capture", "--rate", "1M", "--time", "20ms", "--trigger", "B3=r", "--timeout", "50ms")
-        self.assertEqual(code, 0)
+        self.assertEqual(code, 3)                                   # saved, but not what was asked for
+        self.assertIn("Waiting for the trigger (B3=r), 50 ms at the most.  Ctrl-C stops.", err)
+        self.assertNotIn("Triggered.", err)
         self.assertIn("NOT TRIGGERED (B3=r): these are the last 2000 samples the board saw.", out)
         self.assertIn("the time given with --timeout had passed", out)
         code, out, err = self.run_it("capture", "-n", "300", "--clock", "A1=r", "--trigger", "A0=1 for 3", "--before", "10")
         self.assertEqual(code, 0)
         self.assertIn("a sample at each edge A1=r: 310 samples", out)
         self.assertIn("trigger (A0=1 for 3): sample 10", out)
+
+    def test_names_find_detect_and_plot(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "n.lb16")
+            code, out, err = self.run_it("capture", "--rate", "2M", "--time", "50ms", "--name", "A0=SDA", "--name", "A1=SCL", path)
+            self.assertEqual(code, 0, err)
+            self.assertIn("  A0 (SDA): 292 changes", out)
+            self.assertIn("  A1 (SCL): ", self.run_it("show", path)[1])
+            self.assertIn("  A1 (SCL): 1434 changes (717 rising, 717 falling)", self.run_it("measure", path, "SCL")[1])
+            code, out, err = self.run_it("find", path, "SDA=f SCL=1", "--limit", "2")
+            self.assertEqual(code, 0, err)
+            self.assertIn("\"A0=f A1=1\" found 15 times from 0 s to 0.05 s (a sample is 500 ns):\n    0.000020000 s\n", out)
+            self.assertIn("  ... and 13 more (--limit lists more).", out)
+            code, out, err = self.run_it("find", path, "SCL=1 for 100us", "--limit", "1")
+            self.assertIn("    0.001480000 s   held 112.5 us, from 0.001380500 s\n", out)
+            self.assertIn("  held: the shortest 112 us, the median 112.5 us, the longest 17.288 ms", out)
+            self.assertIn("pulse 5 us, from 0.000025500 s", self.run_it("find", path, "A1=0 pulse ..6us")[1])
+            self.assertIn("5.5 us after the first stage (at 0.000020000 s)", self.run_it("find", path, "SDA=f SCL=1 then SCL=f")[1])
+            self.assertEqual(json.loads(self.run_it("find", path, "A0=r", "--json", "--limit", "0")[1])["found"], [])
+            code, out, err = self.run_it("detect", path)
+            self.assertEqual(code, 0, err)
+            self.assertIn("  I2C      SDA A0, SCL A1; 100 kHz; 78 bytes\n             decode: i2c scl=A1 sda=A0\n", out)
+            self.assertIn("  steady: A2 A3 A4 A5 A6 A7 B0 B1 B2 B3 B4 B5 B6 B7 low\n", out)
+            self.assertIn("--name A0=SDA,A1=SCL", out)
+            self.assertEqual(json.loads(self.run_it("detect", path, "--json")[1])["buses"][0]["bus"], "i2c")
+            code, out, err = self.run_it("plot", path, "--to", "1ms", "--mark", "0.2ms,0.4ms", "--mark", "5ms")
+            self.assertEqual(code, 0, err)
+            png = os.path.join(folder, "n.png")
+            self.assertIn("wrote %s: A0 A1 from 0 s to 0.001 s" % png, out)
+            self.assertIn("  mark 1 at 0.0002 s\n  mark 2 at 0.0004 s\n", out)
+            self.assertNotIn("mark 3", out)
+            with open(png, "rb") as f:
+                self.assertEqual(pixels(f.read())[0], 1200)
+            code, out, err = self.run_it("plot", path, "SCL", "-o", os.path.join(folder, "s.png"), "--width", "600", "--json")
+            got = json.loads(out)
+            self.assertEqual((got["channels"], got["width"], got["busy"], got["file"]), (["A1"], 600, ["A1"], os.path.join(folder, "s.png")))
+            self.assertIn("shown as bands", self.run_it("plot", path)[1])
+            # what is refused, before anything is captured
+            for words, why in ((("--name", "A0=SCL,A1=SCL"), "A0 and A1 would both be named SCL."),
+                               (("--name", "A0=then"), "then cannot be a channel's name"),
+                               (("--trigger", "SDA=f"), "SDA is not a channel")):
+                code, out, err = self.run_it("capture", os.path.join(folder, "no.lb16"), *words)
+                self.assertEqual((code, why in err), (1, True), words)
+            self.assertEqual(sorted(os.listdir(folder)), ["n.lb16", "n.png", "s.png"])
+            code, out, err = self.run_it("capture", "--rate", "2M", "--time", "5ms", "--name", "A0=SDA,A1=SCL",
+                                         "--trigger", "SDA=f SCL=1", path)
+            self.assertIn("trigger (A0=f A1=1): ", out)
+            self.assertEqual((code, self.run_it("find", path, "MOSI=r")[2].strip()),
+                             (0, "MOSI is not a channel: they are A0 ... A7 and B0 ... B7, or by name SDA (A0), SCL (A1)."))
 
     def test_thresholds_as_json(self):
         code, out, err = self.run_it("threshold", "1.65", "0.9", "--json")
@@ -1547,6 +2267,78 @@ class TheCommandLine(unittest.TestCase):
             code, out, err = self.run_it("measure", os.path.join(folder, "none.lb16"))
             self.assertEqual((code, err.strip()), (1, "%s: there is no such file." % os.path.join(folder, "none.lb16")))
 
+    def test_the_readmes_first_commands(self):
+        # README.md's "The command line", in its order: a capture into both files, then the reading of it
+        with tempfile.TemporaryDirectory() as folder:
+            lb16, sr = os.path.join(folder, "bus.lb16"), os.path.join(folder, "bus.sr")
+            code, out, err = self.run_it("capture", lb16, sr, "--rate", "10M", "--time", "0.1", "-a", "1.65", "-b", "0.9")
+            self.assertEqual(code, 0, err)
+            self.assertIn("wrote %s\nwrote %s" % (lb16, sr), out)
+            self.assertEqual(self.run_it("capture", os.path.join(folder, "reset.sr"), "--rate", "200M", "--time", "1ms",
+                                         "--trigger", "A1=f")[0], 0)
+            code, from_lb16, err = self.run_it("measure", lb16)
+            self.assertEqual(code, 0, err)
+            code, from_sr, err = self.run_it("measure", sr)             # the same, read off the sigrok session
+            self.assertEqual(code, 0, err)
+            self.assertEqual(from_sr.replace(sr, "F"), from_lb16.replace(lb16, "F"))
+            self.assertIn("A1: ", from_sr)
+            code, out, err = self.run_it("show", sr)
+            self.assertEqual(code, 0, err)
+            self.assertIn("10 MS/s for 0.1 s: 1000000 samples", out)
+            code, out, err = self.run_it("convert", sr, os.path.join(folder, "back.lb16"))
+            self.assertEqual(code, 0, err)
+            self.assertEqual(Capture.load(os.path.join(folder, "back.lb16")).samples, 1000000)
+
+    def test_a_capture_too_long_for_an_lb16_file(self):
+        with tempfile.TemporaryDirectory() as folder:
+            lb16 = os.path.join(folder, "long.lb16")
+            for words in (("--rate", "200M", "--time", "30"), ("--rate", "200M", "--time", "20", "--trigger", "A0=r"),
+                          ("-n", "5000000000"), ("--fast", "A0-A3", "--time", "6")):
+                code, out, err = self.run_it("capture", lb16, *words)
+                self.assertEqual(code, 1, words)
+                self.assertIn("An .lb16 file holds 2^32 samples at most", err, words)
+            self.assertIn("(21.47 s at 200 MS/s)", self.run_it("capture", lb16, "--rate", "200M", "--time", "30")[2])
+            self.assertEqual(os.listdir(folder), [])                    # refused before anything was captured
+            self.assertEqual(self.run_it("capture", os.path.join(folder, "long.sr"), "--rate", "200M", "--time", "30",
+                                         "--trigger", "B3=r", "--timeout", "10ms")[0], 3)       # other files are not held to it
+            # (3: the trigger did not come, so the capture is the last samples the board saw)
+            # a capture of no set length that runs past it is written as .sr in the .lb16 file's place
+            with unittest.mock.patch.object(C, "LB16_SAMPLES", 1000):
+                cap = Capture(1e6, array("H", [0, 1, 0]), array("Q", [1500, 10, 20]))
+                err = io.StringIO()
+                with contextlib.redirect_stderr(err):
+                    written = cli.save(cap, [lb16, os.path.join(folder, "long.csv")])
+            self.assertEqual(written, [os.path.join(folder, "long.sr"), os.path.join(folder, "long.csv")])
+            self.assertIn("Written as %s in its place." % os.path.join(folder, "long.sr"), err.getvalue())
+            self.assertEqual(Capture.load(os.path.join(folder, "long.sr")).samples, 1530)
+
+    def test_the_skill_comes_with_the_software(self):
+        code, out, err = self.run_it("skill")
+        self.assertEqual(code, 0, err)
+        self.assertTrue(out.startswith("---\nname: logic-boole-16\n"))
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "logic-boole-16", "SKILL.md")
+            code, said, err = self.run_it("skill", "--install", folder)
+            self.assertEqual((code, said), (0, "wrote %s.\n" % path))
+            with open(path) as f:
+                self.assertEqual(f.read(), out)
+            self.assertEqual(self.run_it("skill", "--install", folder)[1], "%s is there already, as this version has it.\n" % path)
+            with open(path, "w") as f:
+                f.write("an older one")
+            self.assertEqual(self.run_it("skill", "--install", folder)[1], "updated %s.\n" % path)
+            with unittest.mock.patch.dict(os.environ, {"HOME": folder}):           # Claude Code's folder by default
+                code, said, err = self.run_it("skill", "--install")
+            self.assertIn("wrote %s" % os.path.join(folder, ".claude", "skills", "logic-boole-16", "SKILL.md"), said)
+            self.assertIn("Claude Code finds it in its next session.", said)
+
+    def test_info_names_the_revision(self):
+        bus = fake.FakeBus(instant=True)
+        B.connect(backend=bus).close()                  # loaded, as by an earlier command
+        with unittest.mock.patch.object(fake, "FakeBus", lambda: bus):
+            code, out, err = self.run_it("info")
+            self.assertIn("  board V1.0.0: thresholds from 0.3 V to 3 V\n", out)
+            self.assertEqual(json.loads(self.run_it("info", "--json")[1])["threshold_range"], [0.3, 3.0])
+
     path = Decoders.path
 
     def test_decoders(self):
@@ -1558,6 +2350,7 @@ class TheCommandLine(unittest.TestCase):
         self.assertIn("  the trigger is at 0.000077000 s (sample 77)", out)
         self.assertIn("    0.000061000 s  address-write  Address write: 16", out)
         self.assertIn("  ... and 4 more.", out)
+        self.assertEqual(self.run_it("decode", capture, "i2c scl=A1 sda=A0", "--limit", "2")[:2], (code, out))  # quoted
         code, out, err = self.run_it("decode", capture, "i2c", "scl=A1", "sda=A0", "eeprom24xx", "--only", "ack,byte-write")
         self.assertIn("    0.000061000 s  eeprom24xx.byte-write  Byte write (addr=4C): \"x\"", out)
         self.assertIn("    0.000221000 s  i2c.ack                ACK", out)
@@ -1566,6 +2359,15 @@ class TheCommandLine(unittest.TestCase):
         self.assertEqual(([a["text"] for a in got["annotations"]], got["total"]), (["Write", "ACK", "Data write: 4C"], 3))
         code, out, err = self.run_it("decode", capture, "i2c", "scl=A1")
         self.assertEqual((code, out, err.strip()), (1, "", "i2c needs: sda=CHANNEL (Serial data line)."))
+        out_png = self.path("a.png")
+        code, out, err = self.run_it("plot", capture, "--decode", "i2c scl=A1 sda=A0", "-o", out_png)
+        self.assertEqual(code, 0, err)
+        self.assertRegex(out, r"  [1-6] decoded results drawn")
+        notes = P.decoded(capture, ["i2c scl=A1 sda=A0", "i2c scl=A0 sda=A1"], 0.0001, 0.0003, self.cap.seconds)
+        self.assertEqual(sorted({n["lane"] for n in notes}), ["i2c", "i2c 2"])
+        self.assertTrue(all(n["end"] >= 0.0001 for n in notes))     # what ends before the part is left out
+        self.assertIn("Data write: 4C", [n["text"] for n in notes])  # begins in it
+        self.assertIn("Address write: 16", [n["text"] for n in notes])   # began before it and goes into it
         code, out, err = self.run_it("decoders")
         self.assertIn("  i2c                  Inter-Integrated Circuit\n", out)
         self.assertIn("3 decoders.", out)
@@ -1609,6 +2411,365 @@ class TheCommandLine(unittest.TestCase):
             code, out, err = self.run_it(*words)
             self.assertNotEqual(code, 0, words)
             self.assertIn(why, out + err, words)
+
+
+    def test_exit_codes(self):
+        # info: not 0 without a board, with --json or not, and the JSON is printed all the same
+        bus = fake.FakeBus(stage="none")
+        with unittest.mock.patch.object(fake, "FakeBus", lambda: bus):
+            self.assertEqual(self.run_it("info")[:2], (1, "No board on USB.\n"))
+            code, out, err = self.run_it("info", "--json")
+            self.assertEqual((code, json.loads(out)["state"]), (1, "none"))
+        self.assertEqual(self.run_it("info", "--json")[0], 0)
+        # a capture that is saved but is not what was asked for: 3
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "o.lb16")
+            for link, note in ((3, False), (2, True)):
+                bus = fake.FakeBus(overflow_at=5000)
+                bus.link = link
+                with unittest.mock.patch.object(fake, "FakeBus", lambda: bus):
+                    code, out, err = self.run_it("capture", "--rate", "1M", "--time", "20ms", path)
+                self.assertEqual(code, 3, err)
+                self.assertIn("OVERFLOW: ", out)
+                self.assertEqual("The link runs at 480 Mbit/s, not USB 3's 5 Gbit/s: a USB 3 port and cable carry "
+                                 "about nine times as much." in out, note)
+                self.assertEqual(Capture.load(path).samples, 5000)
+                os.remove(path)
+        self.assertIn("The exit status is 0 for a capture as asked for, 1 if something went wrong",
+                      " ".join(self.run_it("capture", "-h")[1].split()))
+
+    def test_ctrl_c_anywhere_is_one_line(self):
+        for words, where, name in ((["selftest"], cli, "selftest"), (["show", "x.lb16"], Capture, "load"),
+                                   (["load"], B, "connect"), (["decode", "x.lb16", "i2c"], D, "decode"),
+                                   (["check"], B, "look")):
+            with unittest.mock.patch.object(where, name, side_effect=KeyboardInterrupt):
+                code, out, err = self.run_it(*words)
+            self.assertEqual((code, err.splitlines()[-1]), (130, "Stopped (Ctrl-C)."), words)
+            self.assertNotIn("Traceback", err)
+
+    def test_what_is_refused_before_a_capture(self):
+        bus = fake.FakeBus()
+        with tempfile.TemporaryDirectory() as folder, unittest.mock.patch.object(fake, "FakeBus", lambda: bus):
+            os.mkdir(os.path.join(folder, "d.sr"))
+            for words, said in (([os.path.join(folder, "no", "x.lb16")], "x.lb16 cannot be saved: there is no folder "),
+                                ([os.path.join(folder, "x.txt")], "a capture is saved as .lb16, .sr, .vcd or .csv"),
+                                ([os.path.join(folder, "d.sr")], "d.sr is a folder: give the name of a file in it."),
+                                (["--trigger", "A0=r", "--before", "0.05"],
+                                 "--before 0.05: write 50ms, or a whole number of samples."),
+                                (["--trigger", "A0=r", "--before", "lots"], "--before lots: write 50ms"),
+                                (["-a", "0.1"], "A threshold of 0.1 V is outside what the board takes, 0.3 V to 3 V: "
+                                                "set it to about half your logic voltage, for example 1.65 V for 3.3 V "
+                                                "logic."),
+                                (["-b", "3.3"], "A threshold of 3.3 V is outside")):
+                code, out, err = self.run_it("capture", *words)
+                self.assertEqual(code, 1, words)
+                self.assertIn(said, err, words)
+            self.assertNotIn(0xC2, [r[0] for r in bus.requests])    # no capture was begun
+            self.assertEqual(os.listdir(folder), ["d.sr"])
+            code, out, err = self.run_it("capture", "--glitch", "5", os.path.join(folder, "g.lb16"))
+            self.assertEqual(code, 2)
+            self.assertIn("argument --glitch: 5 is not a time: a glitch filter is 20ns, 1us and the like, or off.",
+                          err)
+            code, out, err = self.run_it("threshold", "5")
+            self.assertEqual(code, 1)
+            self.assertIn("A threshold of 5 V is outside what the board takes", err)
+
+    def test_small_things(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "p.lb16")
+            code, out, err = self.run_it("capture", "--rate", "1M", "--time", "2ms", "--test", path)
+            self.assertEqual(code, 0, err)                          # "--test FILE": the file, and the shift is 8
+            self.assertIn("every word is the test pattern's", out)
+            self.assertEqual(Capture.load(path).lengths[0], 256)
+            self.run_it("capture", "--rate", "1M", "--time", "2ms", "--test", "3", path)
+            self.assertEqual(Capture.load(path).lengths[0], 8)
+            code, out, err = self.run_it("capture", "--rate", "1M", "--time", "2ms")
+            self.assertEqual(code, 0)
+            self.assertIn("No FILE given: the capture is shown, not saved.\n", err)
+            # the board leaves USB part-way: what arrived is saved, and the problem printed
+            bus = fake.FakeBus()
+            B.connect(backend=bus).close()
+            bus.leave_after = 1
+            with unittest.mock.patch.object(fake, "FakeBus", lambda: bus):
+                code, out, err = self.run_it("capture", "--rate", "10M", "--time", "1", path)
+            self.assertEqual(code, 1)
+            self.assertIn("WRONG: the board left USB after ", out)
+            self.assertIn("wrote %s" % path, out)
+            bus.stage, bus.leave_after = "boot", None               # plugged in again
+            bus.leave_after = 1
+            with unittest.mock.patch.object(fake, "FakeBus", lambda: bus):
+                code, out, err = self.run_it("capture", "--rate", "10M", "--time", "1", "--trigger", "A1=f", path)
+            self.assertEqual(code, 1)
+            self.assertIn("The board left USB (unplugged, the cable, or a hub) during the capture", err)
+
+    def test_check_says_what_it_did_on_the_way(self):
+        bus = fake.FakeBus(instant=True)
+        B.connect(backend=bus).close()
+        bus.leave_running()
+        bus.firmware_version = 1
+        with unittest.mock.patch.object(fake, "FakeBus", lambda: bus):
+            code, out, err = self.run_it("check")
+            self.assertEqual(code, 0, out + err)
+            self.assertIn("\n" + B.STALE + "\n", out)
+            self.assertIn("\nThe board runs firmware version 1; this software comes with version 2: loading it.\n", out)
+            self.assertNotIn("firmware: ", out)
+            self.assertNotIn("FPGA: ", out)
+            bus.leave_running()
+            code, out, err = self.run_it("info")
+            self.assertEqual((code, err), (0, B.STALE + "\n"))
+            self.assertTrue(out.startswith("Ready"))
+            bus.leave_running(held=True)
+            code, out, err = self.run_it("info")
+            self.assertEqual((code, out.splitlines()[0]), (1, B.IN_USE))
+
+
+class ChannelNames(unittest.TestCase):
+    def test_names_are_checked(self):
+        self.assertEqual(C.parse_names("A0=SDA, a1=scl B7=RESET_N"), {0: "SDA", 1: "scl", 15: "RESET_N"})
+        for text, why in (("A9=X", "given as A0=SDA"), ("SDA", "given as A0=SDA"), ("A0=", "1 to 24 letters"),
+                          ("A0=two words", "given as A0=SDA"), ("A0=a" * 1 + "b" * 24, "1 to 24 letters"),
+                          ("A0=B1", "means something else"), ("A0=then", "means something else"),
+                          ("A0=In", "means something else"), ("A0=X,A0=Y", "A0 is named twice")):
+            with self.assertRaises(ValueError) as caught:
+                C.parse_names(text)
+            self.assertIn(why, str(caught.exception), text)
+        self.assertEqual(C.parse_names("A0=A0"), {0: "A0"})         # a channel's own id: no name
+
+    def test_a_capture_with_names(self):
+        cap = capture_of(1e6, 100, {0: (0, [10, 20, 30, 40]), 1: (1, [50])})
+        cap.set_names("A0=CLK,A1=EN")
+        self.assertEqual((cap.channel("clk"), cap.channel("A1"), cap.channel("en"), cap.label(0), cap.label(2)),
+                         (0, 1, 1, "A0 (CLK)", "A2"))
+        with self.assertRaises(ValueError) as caught:
+            cap.channel("MISO")
+        self.assertEqual(str(caught.exception), "MISO is not a channel: they are A0 ... A7 and B0 ... B7, or by name "
+                                                "CLK (A0), EN (A1).")
+        with self.assertRaises(ValueError) as caught:
+            cap.set_names("B0=clk")
+        self.assertEqual(str(caught.exception), "A0 and B0 would both be named clk.")
+        self.assertEqual(cap.names[8], "B0")                        # refused whole
+        m = cap.measure(["CLK", "en"])
+        self.assertEqual([(c["channel"], c["name"], c["changes"]) for c in m["channels"]], [("A0", "CLK", 4), ("A1", "EN", 1)])
+        self.assertEqual([c.get("name") for c in cap.summary()[:3]], ["CLK", "EN", None])
+        with tempfile.TemporaryDirectory() as folder:
+            for ending in ("lb16", "sr"):
+                path = os.path.join(folder, "n." + ending)
+                cap.save(path)
+                self.assertEqual(Capture.load(path).names[:3], ["CLK", "EN", "A2"], ending)
+
+    def test_a_trigger_given_by_names(self):
+        cap = capture_of(1e6, 10, {})
+        cap.set_names("A0=SDA,A1=SCL,B0=go")
+        self.assertEqual(search.with_ids(cap, "SDA=f scl=1 then GO=r for 1us"), "A0=f A1=1 then B0=r for 1us")
+        self.assertEqual(search.with_ids(cap, "in=r then A0=0 pulse ..50ns"), "in=r then A0=0 pulse ..50ns")
+        with self.assertRaises(ValueError):
+            search.with_ids(cap, "MOSI=r")
+
+
+class Finding(unittest.TestCase):
+    # A0 at 1 MS/s: high 10 samples, low 2 (a glitch), high 18, low 10, high 5, low 1 (a glitch), high 4 to the end
+    CAP = staticmethod(lambda: capture_of(1e6, 50, {0: (1, [10, 12, 30, 40, 45, 46])}))
+
+    def times(self, found):
+        return [round(f["time"] * 1e6) for f in found["found"]]
+
+    def held(self, found):
+        return [(round(f["held"]["start"] * 1e6), round(f["held"]["end"] * 1e6), f["held"].get("before", False),
+                 f["held"].get("to_end", False)) for f in found["found"]]
+
+    def test_pulses_and_levels_worked_out_by_hand(self):
+        cap = self.CAP()
+        f = search.find(cap, "A0=0 pulse ..3us")
+        self.assertEqual((f["find"], f["total"], self.times(f)), ("A0=0 pulse ..3us", 2, [12, 46]))
+        self.assertEqual(self.held(f), [(10, 12, False, False), (45, 46, False, False)])
+        self.assertEqual(f["held"], {"min": 1e-6, "median": 1.5e-6, "max": 2e-6})
+        self.assertEqual(self.times(search.find(cap, "A0=0 pulse 5us..")), [40])
+        f = search.find(cap, "A0=1 for 5us")                        # once a stretch: the last 4 are too short
+        self.assertEqual(self.times(f), [4, 16, 44])
+        self.assertEqual(self.held(f), [(0, 10, True, False), (12, 30, False, False), (40, 45, False, False)])
+        self.assertEqual(f["held"], {"min": 5e-6, "median": 10e-6, "max": 18e-6})
+        f = search.find(cap, "A0=1")
+        self.assertEqual(self.held(f), [(0, 10, True, False), (12, 30, False, False), (40, 45, False, False),
+                                        (46, 50, False, True)])
+        f = search.find(cap, "A0=f")
+        self.assertEqual((self.times(f), "held" in f, "held" in f["found"][0]), ([10, 30, 45], False, False))
+        self.assertEqual(self.times(search.find(cap, "A0=e")), [10, 12, 30, 40, 45, 46])
+
+    def test_a_part_of_the_capture_a_limit_and_names(self):
+        cap = self.CAP()
+        self.assertEqual(self.times(search.find(cap, "A0=f", start=20e-6)), [30, 45])
+        self.assertEqual(self.times(search.find(cap, "A0=f", end=40e-6)), [10, 30])
+        self.assertEqual(self.times(search.find(cap, "A0=f", start=11e-6)), [30, 45])      # no edge at the cut
+        f = search.find(cap, "A0=0", start=35e-6)
+        self.assertEqual(self.held(f), [(35, 40, True, False), (45, 46, False, False)])
+        f = search.find(cap, "A0=e", limit=2)
+        self.assertEqual((f["total"], len(f["found"])), (6, 2))
+        cap.set_names("A0=CLK")
+        self.assertEqual(self.times(search.find(cap, "clk=f")), [10, 30, 45])
+        with self.assertRaises(T.TriggerError) as caught:
+            search.find(cap, "in=r")
+        self.assertIn("TRIG IN is not in a saved capture", str(caught.exception))
+        with self.assertRaises(ValueError):
+            search.find(cap, "A0=f", start=30e-6, end=20e-6)
+        with self.assertRaises(ValueError):
+            search.find(cap, "MOSI=f")
+
+    def test_stages_one_after_the_other(self):
+        # CS (A2) falls at 10 and 60; the clock (A3) rises 4 samples after the first and 7 after the second
+        cap = capture_of(1e6, 100, {2: (1, [10, 40, 60, 90]), 3: (0, [14, 16, 18, 20, 67, 69])})
+        f = search.find(cap, "A2=f then A3=r")
+        self.assertEqual([(round(x["first"] * 1e6), round(x["time"] * 1e6), round(x["span"] * 1e6)) for x in f["found"]],
+                         [(10, 14, 4), (60, 67, 7)])
+
+    def test_what_the_trigger_would_catch_on_the_stand_in(self):
+        with B.connect(backend=fake.FakeBus(instant=True), log=None) as board:
+            cap = board.capture(rate=2e6, seconds=0.05)
+        probes = samples_of(cap.values, cap.lengths)
+        for text in ("A0=f A1=1", "A1=f then A0=r", "A1=1 for 20us"):
+            want = trigger_sample(probes, T.parse(text, 2e6))         # the trigger's model finds the first
+            self.assertEqual(search.find(cap, text)["found"][0]["sample"], want, text)
+        f = search.find(cap, "A1=1 for 100us")
+        self.assertEqual((f["total"], round(f["held"]["median"] * 1e6, 1)), (12, 112.5))
+
+
+class Detecting(unittest.TestCase):
+    def test_buses_and_signals_made_here(self):
+        rate = 10e6
+        cs, clk, mosi = spi_edges(1000, 5, [[0x9F, 0x00, 0x00], [0x03, 0x12, 0x34], [0x05, 0xA5]])
+        lines = {4: (1, cs), 5: (0, clk), 6: (0, mosi),
+                 10: (1, uart_edges(5000, rate / 115200, b"Hello, world")),
+                 8: (0, list(range(100, 200000, 100))),              # 50 kHz
+                 15: (1, [])}
+        found = DT.detect(capture_of(rate, 200000, lines))
+        by = {b["bus"]: b for b in found["buses"]}
+        self.assertEqual(sorted(by), ["spi", "uart"])
+        spi, uart = by["spi"], by["uart"]
+        self.assertEqual((spi["cs"], spi["clk"], spi["mosi"], spi["mode"], spi["bytes"]), ("A4", "A5", "A6", 0, 8))
+        self.assertEqual(spi["clock_hz"], 1e6)
+        self.assertEqual(spi["decode"], "spi clk=A5 cs=A4 mosi=A6 cpol=0 cpha=0")
+        self.assertEqual(spi["names"], "A5=SPI_CLK,A4=SPI_CS,A6=SPI_MOSI")
+        self.assertEqual((uart["rx"], uart["baudrate"], uart["bytes"], uart["decode"]),
+                         ("B2", 115200, 12, "uart rx=B2 baudrate=115200"))
+        ch = {c["channel"]: c for c in found["channels"]}
+        self.assertEqual((ch["A4"]["kind"], ch["B2"]["kind"], ch["B0"]["kind"]), ("spi", "uart", "clock"))
+        self.assertAlmostEqual(ch["B0"]["frequency"], 50e3)
+        self.assertAlmostEqual(ch["B0"]["duty"], 0.5, 3)
+        self.assertEqual((ch["B7"]["kind"], ch["B7"]["level"], ch["A0"]["kind"], ch["A0"]["level"]), ("steady", 1, "steady", 0))
+
+    def test_the_stand_ins_bus_with_names(self):
+        with B.connect(backend=fake.FakeBus(instant=True), log=None) as board:
+            cap = board.capture(rate=2e6, seconds=0.05)
+        cap.set_names("A0=data")
+        found = DT.detect(cap)
+        self.assertEqual(found["buses"], [{"bus": "i2c", "sda": "A0", "scl": "A1", "bytes": 78, "clock_hz": 100e3,
+                                           "decode": "i2c scl=A1 sda=A0", "names": "A0=SDA,A1=SCL"}])
+        self.assertEqual(found["channels"][0], {"channel": "A0", "changes": 292, "name": "data", "kind": "i2c"})
+        self.assertEqual(DT.detect(capture_of(1e6, 10, {}))["buses"], [])
+
+    def test_serial_formats(self):
+        # as the app's auto-detect finds them: 8N1, 8E1, 8O1, and 7E1 told from 8N1 by its parity bit
+        rate, text = 10e6, b"Logic Boole 16: frame 2, 25.4 C\r\nOK?\r\n"
+        for bits, parity, more in ((8, "none", ""), (8, "even", " parity=even"), (8, "odd", " parity=odd"),
+                                   (7, "even", " data_bits=7 parity=even")):
+            cap = capture_of(rate, 200000, {6: (1, uart_edges(1000, rate / 115200, text, bits, parity))})
+            (uart,) = DT.detect(cap)["buses"]
+            self.assertEqual((uart["data_bits"], uart["parity"], uart["bytes"], uart["decode"]),
+                             (bits, parity, len(text), "uart rx=A6 baudrate=115200" + more))
+        # 8N1 whose bytes all have an even number of ones stays 8N1: 7E1 needs a byte with its top bit set
+        even = bytes(c for c in text if not bin(c).count("1") & 1) * 3
+        cap = capture_of(rate, 200000, {6: (1, uart_edges(1000, rate / 115200, even))})
+        self.assertEqual([(b["data_bits"], b["parity"]) for b in DT.detect(cap)["buses"]], [(8, "none")])
+
+    def test_a_name_taken_by_an_earlier_bus_is_numbered(self):
+        rate = 10e6
+        lines = {10: (1, uart_edges(5000, rate / 115200, b"Hello, world")),
+                 11: (1, uart_edges(9000, rate / 9600, b"Second line here"))}
+        found = DT.detect(capture_of(rate, 400000, lines))
+        self.assertEqual([b["names"] for b in found["buses"]], ["B3=UART", "B2=UART2"])
+
+
+def pixels(png):
+    """A PNG that plot() wrote, as (width, height, rows of palette indices)."""
+    assert png[:8] == b"\x89PNG\r\n\x1a\n"
+    pos, chunks = 8, {}
+    while pos < len(png):
+        n, = struct.unpack(">I", png[pos:pos + 4])
+        kind, data = png[pos + 4:pos + 8], png[pos + 8:pos + 8 + n]
+        assert struct.unpack(">I", png[pos + 8 + n:pos + 12 + n])[0] == zlib.crc32(kind + data) & 0xFFFFFFFF
+        chunks[kind] = chunks.get(kind, b"") + data
+        pos += 12 + n
+    w, h, depth, color = struct.unpack(">IIBB", chunks[b"IHDR"][:10])
+    assert (depth, color, len(chunks[b"PLTE"])) == (8, 3, 3 * len(P.PALETTE))
+    raw = zlib.decompress(chunks[b"IDAT"])
+    assert len(raw) == h * (w + 1)
+    return w, h, [raw[y * (w + 1) + 1:(y + 1) * (w + 1)] for y in range(h)]
+
+
+class Plotting(unittest.TestCase):
+    def test_a_picture_of_a_capture(self):
+        cap = capture_of(1e6, 1000, {0: (0, list(range(10, 1000, 10))), 3: (1, [500])}, trigger=250)
+        cap.set_names("A0=CLK")
+        png, info = P.plot(cap, marks=[0.0001, 0.002], title="t")
+        w, h, rows = pixels(png)
+        self.assertEqual((w, h), (info["width"], info["height"]))
+        self.assertEqual((info["channels"], info["names"], info["start"], info["end"]), (["A0", "A3"], ["CLK", "A3"], 0, 0.001))
+        self.assertEqual(info["marks"], [{"mark": 1, "time": 0.0001}])            # the second is past the end
+        self.assertEqual(info["busy"], [])
+        seen = set(b"".join(rows))
+        self.assertTrue({P.TRACE, P.MARK, P.TRIGGER, P.INK} <= seen)
+        png, info = P.plot(cap, ["clk"], start=0.0006, end=0.0008, width=50)
+        w, h, rows = pixels(png)
+        self.assertEqual((w, info["channels"], info["marks"]), (400, ["A0"], []))      # 400 pixels at the least
+        self.assertNotIn(P.TRIGGER, set(b"".join(rows)))                               # the trigger is not in it
+        dense = capture_of(1e6, 100000, {0: (0, list(range(1, 100000)))})
+        self.assertEqual(P.plot(dense)[1]["busy"], ["A0"])
+        self.assertEqual(P.plot(dense, end=0.0002)[1]["busy"], [])
+        self.assertEqual(P.plot(capture_of(1e6, 100, {}))[1]["channels"], list(CHANNELS))   # none changes: all
+        for args, why in (({"start": 0.002}, "ends before it starts"), ({"channels": ["Z1"]}, "Z1 is not a channel")):
+            with self.assertRaises(ValueError) as caught:
+                P.plot(cap, **args)
+            self.assertIn(why, str(caught.exception))
+
+    def test_decoders_rows_and_the_letters(self):
+        self.assertEqual(len(P.FONT), 96)
+        self.assertEqual(P.FONT["A"], [0b01110, 0b10001, 0b10001, 0b11111, 0b10001, 0b10001, 0b10001])
+        self.assertEqual(P.FONT[" "], [0] * 7)
+        self.assertTrue(all(any(P.FONT[chr(c)]) for c in range(33, 127)))
+        notes = [{"decoder": "i2c", "lane": "i2c", "start_sample": 10, "end_sample": 200, "class": "address-write",
+                  "text": "Address write: 16", "texts": ["Address write: 16", "AW: 16", "16"]},
+                 {"decoder": "i2c", "lane": "i2c", "start_sample": 200, "end_sample": 220, "class": "nack", "text": "NACK"},
+                 {"decoder": "uart", "lane": "uart 2", "start_sample": 5000, "end_sample": 6000, "class": "rx-data", "text": "41"}]
+        cap = capture_of(1e6, 1000, {0: (1, [10, 500]), 1: (1, [20, 600])})
+        png, info = P.plot(cap, annotations=notes)
+        self.assertEqual(info["annotations"], 2)                    # the third is outside the part shown
+        seen = set(b"".join(pixels(png)[2]))
+        self.assertTrue({P.BLUE, P.RED} <= seen)
+        self.assertEqual(P.plot(cap)[1]["height"] + 2 * P.LANE * P.LANES, info["height"])  # a row for each decoder
+        self.assertEqual([P.ticks(0, 1e-3, 5)[:2], P.ticks(0, 0.1, 9)[:2]], [(2e-4, 1e-6), (0.02, 1e-3)])
+        self.assertEqual((P.time_text(0), P.time_text(2.5e-3), P.time_text(1.2e-5, 1e-6, 0)), ("0 s", "2.5 ms", "12 us"))
+
+
+class TheGuide(unittest.TestCase):
+    def test_the_skill_in_parts_for_an_agent_on_mcp(self):
+        text = G.skill_text()
+        heads = [h for h, _ in G.sections()]
+        self.assertEqual(heads[0], "")
+        self.assertIn("Recipes", heads)
+        self.assertEqual("".join(part for _, part in G.sections()), text[text.index("\n---\n") + 5:])
+        everything = G.guide()
+        self.assertTrue(everything.startswith("This guide is the skill file"))
+        self.assertIn("\"Recipes\"", everything)
+        for t in mcp.TOOLS:                                         # every tool is in its table, but the guide
+            if t["name"] != "guide":
+                self.assertIn("`%s`" % t["name"], G.MCP_PREFACE.split("Times are")[0], t["name"])
+        commands = cli.parser()._subparsers._group_actions[0].choices
+        for line in G.MCP_PREFACE.splitlines():
+            if line.startswith("| `logicboole "):
+                self.assertIn(line.split()[2].rstrip("`"), commands, line)
+        part = G.guide("recipes")
+        self.assertTrue(part.startswith("## Recipes\n") and "## Reporting" not in part)
+        self.assertIn("The sections: \"The board, in the terms", G.guide("nothing like it"))
+        self.assertIn("## Finding moments", G.guide("FIND"))
 
 
 class TheFastDesign(unittest.TestCase):
@@ -1663,7 +2824,8 @@ class TheFastDesign(unittest.TestCase):
         # On a computer with 1 GB, the busy test pattern kept as samples stops at 1 GB / 80 = 13.4 million runs:
         # an early end, "size", and whole up to there.  The self-test's way (keep=False) is not limited
         bus = self.bus()
-        with unittest.mock.patch.object(B, "memory", lambda: 1 << 30), B.connect(backend=bus) as board:
+        with unittest.mock.patch.object(B, "memory", lambda: 1 << 30), unittest.mock.patch.object(B, "time", SlowClock()), \
+                B.connect(backend=bus) as board:
             cap = board.capture_fast("A0-A3", seconds=0.02, fmt="raw", test=0)
             self.assertEqual((cap.ok, cap.stopped), (True, "size"))
             self.assertTrue((1 << 30) // 80 <= len(cap.values) < (1 << 30) // 80 + 8)
@@ -1792,12 +2954,13 @@ class TheFastDesign(unittest.TestCase):
             with self.assertRaisesRegex(B.BoardError, "shorter than one sample"):
                 board.capture_fast("A", seconds=1e-10)
             loads = self.loads(bus)
-            bus.stream = True                                       # another program is capturing
-            with self.assertRaisesRegex(B.BoardError, "capture is running"):
-                board.capture_fast("A")
-            self.assertEqual(self.loads(bus), loads)                # and the FPGA was left as it was
-            bus.stream = False
             board.use("standard")
+            bus.leave_running(held=True)                            # another program is capturing
+            with self.assertRaisesRegex(B.BoardError, "Another program is capturing"):
+                board.capture_fast("A")
+            self.assertEqual(self.loads(bus), loads + 1)            # and the FPGA was left as it was
+            bus.request_out(0xC3, 0, 0, b"")                        # it ends its capture
+            bus.claimed = False
             board.designs["fast"] = os.path.join(tempfile.gettempdir(), "there-is-no-such-design.bin")
             with self.assertRaisesRegex(B.BoardError, "The fast design's file is not there"):
                 board.capture_fast("A")

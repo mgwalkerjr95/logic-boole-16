@@ -7,11 +7,11 @@
      The page numbers of the contents on page 1 are set by hand: check them against the PDF after a change.
      The fonts (Archivo, Archivo Narrow, Courier Prime) are in datasheet/fonts, each under the SIL Open Font
      License (datasheet/fonts/README.md).  The page is white; the pictures have white backgrounds and are blended into the boxes they sit in.
-     The pictures of the board are in hardware/images and datasheet/img. -->
+     The pictures of the board are in ../hardware/images and datasheet/img. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Logic Boole 16 (board revision C) preliminary datasheet, rev F</title>
+<title>Logic Boole 16 (board V1.0.0) preliminary datasheet, rev G</title>
 <meta name="author" content="Michael Walker">
 <link rel="stylesheet" href="datasheet/fonts/fonts.css">
 <style>
@@ -30,7 +30,7 @@
   margin: 18mm 15mm 16mm 15mm;
   background: #ffffff;
   @top-left { content: "LOGIC BOOLE 16  ·  preliminary datasheet"; font: 700 7.2pt "Courier Prime", "Courier New", monospace; color: #46553a; vertical-align: bottom; padding-bottom: 2.5mm; }
-  @top-right { content: "Rev F  ·  2026-11-20  ·  board revision C"; font: 400 7.2pt "Courier Prime", "Courier New", monospace; color: #4a4d40; vertical-align: bottom; padding-bottom: 2.5mm; }
+  @top-right { content: "Rev G  ·  2026-11-24  ·  board V1.0.0 (revision C)"; font: 400 7.2pt "Courier Prime", "Courier New", monospace; color: #4a4d40; vertical-align: bottom; padding-bottom: 2.5mm; }
   @bottom-left { content: "© 2026 Michael Walker. Open hardware, CERN-OHL-S v2. Preliminary: subject to change."; font: 400 7pt "Archivo", Arial, sans-serif; color: #4a4d40; vertical-align: top; padding-top: 3mm; }
   @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 700 7.2pt "Courier Prime", "Courier New", monospace; color: #46553a; vertical-align: top; padding-top: 3mm; }
 }
@@ -201,7 +201,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
     </div>
     <p class="sub">Sixteen channels at 200&nbsp;MS/s, or four at 750&nbsp;MS/s, over USB&nbsp;3, through 1&nbsp;MΩ inputs for 1.2 to 5&nbsp;V logic. It runs from one USB-C cable on a computer, or mounted on a Raspberry Pi 4 or 5 as a HAT+. Open source: the board, the FPGA design, the firmware and the software.</p>
   </div>
-  <div class="rev"><span class="flag">PRELIMINARY</span><br>Datasheet <b>rev F</b><br>2026-11-20<br>Board <b>revision C</b></div>
+  <div class="rev"><span class="flag">PRELIMINARY</span><br>Datasheet <b>rev G</b><br>2026-11-24<br>Board <b>V1.0.0</b></div>
 </header>
 
 <div class="stats">
@@ -271,7 +271,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
 <!-- ============================== 2 SPECIFICATIONS ============================== -->
 <section class="newpage">
 <h2 id="s2"><span class="n">2</span> Specifications</h2>
-<p>For the revision C board. Input figures are at the probe pin of the pod connector. Figures are at room temperature. Section 13 says what was measured, and on which boards.</p>
+<p>For board V1.0.0, which carries the mark REV C on its back. Input figures are at the probe pin of the pod connector. Figures are at room temperature. Section 13 says what was measured, and on which boards.</p>
 
 <h3>Capture</h3>
 <table>
@@ -296,7 +296,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
     <tr><td class="p">Capture clock</td><td class="v"></td><td class="v"></td><td class="v">50</td><td class="v">MHz</td><td>The circuit's own clock on any input: a sample at its rising edges, its falling edges or both. The data must be steady 15 ns before the edge</td></tr>
     <tr><td class="p">Trigger output delay</td><td class="v"></td><td class="v">75–80</td><td class="v"></td><td class="v">ns</td><td>From the trigger sample at the inputs to TRIG OUT. A glitch filter adds its own time and 20 ns</td></tr>
     <tr><td class="p">Trigger input delay</td><td class="v"></td><td class="v"></td><td class="v">5</td><td class="v">ns</td><td>The trigger sample is the sample in which an input shows the same edge, or the one after it. Tried from 100 kHz to 50 MHz</td></tr>
-    <tr><td class="p">Glitch filter</td><td class="v">off</td><td class="v"></td><td class="v">1.25</td><td class="v">µs</td><td>For each channel, in 5 ns steps. A 25 MHz clock passes at 15 ns and is removed at 25 ns</td></tr>
+    <tr><td class="p">Glitch filter</td><td class="v">off</td><td class="v"></td><td class="v">1.25</td><td class="v">µs</td><td>For each channel: off, or 10 ns to 1.25 µs in 5 ns steps. A 25 MHz clock passes at 15 ns and is removed at 25 ns</td></tr>
     <tr><td class="p">Timebase accuracy</td><td class="v"></td><td class="v"></td><td class="v">±50</td><td class="v">ppm</td><td>The 24 MHz oscillator over temperature and five years</td></tr>
   </tbody>
 </table>
@@ -307,7 +307,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
   <tbody>
     <tr><td class="p">Logic level</td><td class="v">1.2</td><td class="v"></td><td class="v">5</td><td class="v">V</td><td></td></tr>
     <tr><td class="p">Threshold range</td><td class="v">0.3</td><td class="v"></td><td class="v">3.0</td><td class="v">V</td><td>Set separately for pod A and pod B. All 16 inputs read a 3.3 V pattern right at every setting from 0.2 to 3.0 V</td></tr>
-    <tr><td class="p">Threshold step</td><td class="v"></td><td class="v">0.75</td><td class="v"></td><td class="v">mV</td><td>A 12-bit setting</td></tr>
+    <tr><td class="p">Threshold step</td><td class="v"></td><td class="v">0.764</td><td class="v"></td><td class="v">mV</td><td>A 12-bit setting</td></tr>
     <tr><td class="p">Threshold voltage</td><td class="v"></td><td class="v">±10</td><td class="v"></td><td class="v">mV</td><td>The voltage the board makes against the setting, as seen from the probe: read at 0.30, 1.56 and 3.00 V on both pods of one board</td></tr>
     <tr><td class="p">Threshold accuracy</td><td class="v"></td><td class="v"></td><td class="v">±100</td><td class="v">mV</td><td>With the input divider's and the comparator's errors: at any setting, without calibration, on 99.7 % of channels</td></tr>
     <tr><td class="p">Hysteresis</td><td class="v">25</td><td class="v">60–80</td><td class="v">100</td><td class="v">mV</td><td>At every threshold setting</td></tr>
@@ -459,7 +459,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
 <text class="dg-t" x="1390" y="947.0" text-anchor="start">Pod B: channels B0–B7</text>
 <text class="dg-s" x="1390" y="973.0" text-anchor="start">Its own threshold: two logic levels at once</text>
 </svg>
-<figcaption><b>Figure 1.</b> Front (component side), labeled. Render of the revision C design.</figcaption>
+<figcaption><b>Figure 1.</b> Front (component side), labeled. Render of the V1.0.0 design.</figcaption>
 </figure>
 <h3>Front</h3>
 <table>
@@ -638,7 +638,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
   <tbody>
     <tr><td>2, 4</td><td class="sig">5 V</td><td>Power in</td><td>Power from the Pi. The board never feeds power back into these pins</td></tr>
     <tr><td>1, 17</td><td class="sig">3.3 V</td><td>Power in</td><td>Supplies the ID EEPROM and tells the board that the Pi is running. In the Pi's standby state, with no USB host attached, the board switches itself off</td></tr>
-    <tr><td>27, 28</td><td class="sig">ID_SD, ID_SC</td><td>I²C</td><td>HAT+ ID EEPROM, at address 0x51</td></tr>
+    <tr><td>27, 28</td><td class="sig">ID_SD, ID_SC</td><td>I²C</td><td>HAT+ ID EEPROM, at address 0x51. Blank on V1.0.0 boards, so a Pi does not recognize the board by name; the analyzer does not use it</td></tr>
     <tr><td>6, 9, 14, 20, 25, 30, 34, 39</td><td class="sig">GND</td><td>Ground</td><td></td></tr>
     <tr><td>3, 5, 8, 10, 19, 21, 23, 24, 26</td><td class="sig">GPIO</td><td>Optional</td><td>Only through the Pi bus jumpers below, which are open as shipped</td></tr>
   </tbody>
@@ -750,7 +750,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
     </ul>
     <p>The trigger output goes high 75 to 80&nbsp;ns after the trigger sample and stays high to the capture's last sample.</p>
     <h3>Glitch filter</h3>
-    <p>Each channel has a filter, off by default. With it set, a change counts once the channel has held its new level for the set time, from 5&nbsp;ns to 1.25&nbsp;µs. Shorter pulses are removed before the trigger and the capture. Every channel is delayed alike, so the edges that pass keep their places against each other.</p>
+    <p>Each channel has a filter, off by default. With it set, a change counts once the channel has held its new level for the set time, from 10&nbsp;ns to 1.25&nbsp;µs. Shorter pulses are removed before the trigger and the capture. Every channel is delayed alike, so the edges that pass keep their places against each other.</p>
   </div>
 </div>
 
@@ -787,7 +787,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
   <div>
     <div class="tip" style="margin-top:4.5mm">
       <div class="h">How it is set</div>
-      <p>In the app, or from the command line. <code>logicboole capture reset.sr --rate 200M --time 1ms --trigger "B0=f"</code> waits for B0 to fall and keeps the millisecond after it, with some of what came before. Section 11 has the software.</p>
+      <p>In the app, or from the command line. <code>logicboole capture reset.sr --rate 200M --time 1ms --trigger "B0=f" --timeout 10</code> waits up to 10&nbsp;s for B0 to fall and keeps the millisecond after it, with some of what came before. While it waits it says so; Ctrl-C ends the wait. Section 11 has the software.</p>
       <p>On a Raspberry Pi with the bus jumpers closed, <code>--pi i2c</code>, <code>uart</code>, <code>spi</code> or <code>all</code> puts the Pi's own lines in place of channels (section 5).</p>
     </div>
   </div>
@@ -809,7 +809,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
 <!-- ============================== 7 GETTING STARTED ============================== -->
 <section>
 <h2 id="s7"><span class="n">7</span> Getting started</h2>
-<p>You need a host (a Mac, a Linux computer, or a Raspberry Pi 4 or 5), a USB-C cable made for USB&nbsp;3, and leads from the pods to your circuit. To mount the board on a Raspberry Pi you also need four M2.5 × 16&nbsp;mm spacers and eight M2.5 × 6&nbsp;mm screws. None of these comes with the board. The <b>quick start guide</b>, <code>docs/quick-start.pdf</code> in the repository, goes through these steps on two pages with what each command prints.</p>
+<p>You need a host (a Mac, a Linux computer, or a Raspberry Pi 4 or 5), a USB-C cable made for USB&nbsp;3, and leads from the pods to your circuit. To mount the board on a Raspberry Pi you also need four M2.5 × 16&nbsp;mm spacers and eight M2.5 × 6&nbsp;mm screws. None of these comes with the board. The <b>quick start guide</b>, <code>boards/v1.0.0/docs/quick-start.pdf</code> in the repository, goes through these steps on two pages with what each command prints.</p>
 <h3>With a computer</h3>
 <ol>
   <li><b>Read section 9, Probing and safety.</b> The analyzer's ground is the host's ground.</li>
@@ -876,7 +876,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
       <li>Screw four M2.5 × 16 mm spacers onto the Pi's mounting holes, from underneath, with four M2.5 × 6 mm screws.</li>
       <li>Press the board's header onto the Pi's 40 pins until the board sits on the spacers, and fit four more screws from the top.</li>
       <li>Connect a USB&nbsp;3 cable, USB-C to USB-A and about 20&nbsp;cm long, from the board to one of the Pi's blue USB&nbsp;3 ports.</li>
-      <li>Go on from step 5 above, with the software on the Pi.</li>
+      <li>Go on from step 2 above, on the Pi: install the software there, then steps 5 to 8. Steps 3 and 4 are done.</li>
     </ol>
     <p><b>Power.</b> The board runs from the Pi's 5&nbsp;V pins, from USB-C, or from both at once. Ideal diodes keep each source from feeding the other, so the board never powers the Pi. When the Pi goes to standby and no USB host is powering the board, it switches itself off.</p>
   </div>
@@ -1083,7 +1083,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
       <li>Indoors and dry, at 0 to 40&nbsp;°C.</li>
       <li>Handle it like any development board. The inputs are protected; the rest of the board is open electronics.</li>
       <li>Not for safety-critical or medical use.</li>
-      <li>Revision C is a prototype. It has not been tested for FCC or CE compliance.</li>
+      <li>V1.0.0 is a prototype. It has not been tested for FCC or CE compliance.</li>
     </ul>
   </div>
 </div>
@@ -1250,7 +1250,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
   </div>
   <div>
     <h3>Host software</h3>
-    <p>One Python package that needs Python 3.9 or later and libusb, and nothing else. It runs from its folder: nothing is built or installed.</p>
+    <p>One Python package that needs Python 3.9 or later and libusb, and nothing else. It installs with <code>pipx install logicboole</code>, or runs from a copy of the repository with nothing installed. Nothing is compiled.</p>
     <ul>
       <li><b>The app</b>: <code>logicboole</code> opens it in a browser, with the waveforms, each pod's threshold, the trigger and the decoders.</li>
       <li><b>The command line</b>: <code>check</code>, <code>capture</code>, <code>decode</code>, <code>measure</code>, <code>selftest</code> and more, with JSON output for scripts.</li>
@@ -1284,11 +1284,11 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
 <table>
   <thead><tr><th style="width:19%">Part</th><th>What is published</th><th style="width:14%">Folder</th><th style="width:19%">License</th></tr></thead>
   <tbody>
-    <tr><td class="p">The board</td><td>The KiCad 10 project, the schematic as a PDF, the parts list, the Gerber files and placement files that revision C was made from, a 3D model</td><td class="mono">hardware/</td><td>CERN-OHL-S v2</td></tr>
+    <tr><td class="p">The board</td><td>The KiCad 10 project, the schematic as a PDF, the parts list, the Gerber files and placement files that revision C was made from, a 3D model</td><td class="mono">boards/v1.0.0/</td><td>CERN-OHL-S v2</td></tr>
     <tr><td class="p">The FPGA design</td><td>The Verilog source, a test bench that checks itself, the build script, and the bitstream the software loads</td><td class="mono">gateware/</td><td>CERN-OHL-S v2</td></tr>
     <tr><td class="p">The firmware</td><td>The FX3's firmware in C</td><td class="mono">firmware/</td><td>MIT</td></tr>
     <tr><td class="p">The host software</td><td>The app, the command line, the Python package, the server and the skill file for AI agents, with their tests</td><td class="mono">software/</td><td>GPL-3.0-or-later</td></tr>
-    <tr><td class="p">The documents</td><td>This datasheet and its source, the quick start guide, the USB requests, the FPGA's registers and the format of the sample stream</td><td class="mono">docs/</td><td>CERN-OHL-S v2</td></tr>
+    <tr><td class="p">The documents</td><td>This datasheet and its source, the quick start guide, the USB requests, the FPGA's registers and the format of the sample stream</td><td class="mono">boards/v1.0.0/, docs/</td><td>CERN-OHL-S v2</td></tr>
   </tbody>
 </table>
 <div class="two even">
@@ -1315,7 +1315,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
 <!-- ============================== 13 STATUS AND KNOWN LIMITS ============================== -->
 <section class="newpage">
 <h2 id="s13"><span class="n">13</span> Status and known limits</h2>
-<p>Revision C is the first build: five boards, of which two have been brought up so far. This is what has been measured on them, and what we know about them. None of it is a safety problem.</p>
+<p>V1.0.0 is the first build: five boards, all brought up. This is what has been measured on them, and what we know about them. None of it is a safety problem.</p>
 <h3>What has been measured</h3>
 <table>
   <thead><tr><th style="width:23%">What</th><th style="width:15%">On</th><th>Result</th></tr></thead>
@@ -1431,9 +1431,9 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
   <div>
     <h3>Board revisions</h3>
     <table>
-      <thead><tr><th style="width:20%">Revision</th><th style="width:30%">Date</th><th>Notes</th></tr></thead>
+      <thead><tr><th style="width:20%">Version</th><th style="width:30%">Date</th><th>Notes</th></tr></thead>
       <tbody>
-        <tr><td class="p">C</td><td>November 2026</td><td>The first build, five boards, ordered in October 2026. This datasheet. "Logic Boole 16" and the revision are printed on the back</td></tr>
+        <tr><td class="p">V1.0.0</td><td>November 2026</td><td>Revision C: the first build, five boards, ordered in October 2026. This datasheet. "Logic Boole 16" and REV C are printed on the back</td></tr>
       </tbody>
     </table>
   </div>
@@ -1448,6 +1448,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
         <tr><td class="p">D</td><td>2026-11-19</td><td>The fast FPGA design: 4 channels at 750 MS/s, 8 at 375 MS/s and 16 at 187.5 MS/s, measured on board 1 (sections 1, 2, 6, 11 and 13)</td></tr>
         <tr><td class="p">E</td><td>2026-11-19</td><td>Measured on a Pi 5; installs with pipx (sections 7 and 13)</td></tr>
         <tr><td class="p">F</td><td>2026-11-20</td><td>New renders of the board (page 1, figures 1, 2, 4 and 5)</td></tr>
+        <tr><td class="p">G</td><td>2026-11-24</td><td>The board's version name, V1.0.0, the repository's folders, and the software's figures (sections 2, 5–7, 11, 12, 14)</td></tr>
       </tbody>
     </table>
   </div>
@@ -1471,7 +1472,7 @@ figure.narrow { width: 82%; margin-left: auto; margin-right: auto; }
     <tr><td class="p">HAT+ ID EEPROM</td><td>STMicroelectronics</td><td class="mono">M24C64-RMN6TP</td><td class="mono">C79988</td></tr>
   </tbody>
 </table>
-<p class="small">On the first boards pod A has the MX3502S and pod B the TLV3502AIDR. The two are pin-compatible. The full parts list is <code>hardware/bom.csv</code> in the repository.</p>
+<p class="small">On the first boards pod A has the MX3502S and pod B the TLV3502AIDR. The two are pin-compatible. The full parts list is <code>boards/v1.0.0/hardware/bom.csv</code> in the repository.</p>
 
 <div class="end">Design files, source and the latest revision of this datasheet: <a href="https://github.com/mgwalkerjr95/logic-boole-16">github.com/mgwalkerjr95/logic-boole-16</a>. Product page: <a href="https://nearfieldsupply.com/boards/logic-boole-16/">nearfieldsupply.com/boards/logic-boole-16</a>. Logic Boole 16 · © 2026 Michael Walker. Designed in Texas. This document is licensed under the CERN-OHL-S v2. Preliminary: figures may change. Raspberry Pi is a trademark of Raspberry Pi Ltd. Other names belong to their owners.</div>
 </section>

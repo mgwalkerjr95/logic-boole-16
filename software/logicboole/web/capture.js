@@ -51,6 +51,7 @@ export class Capture {
     this.source = source;
     this.info = info;
     this.gaps = gaps;
+    this.cut = null;                        // { at, of }: the capture was cut at sample at, of that many
   }
   level(ch, s) {
     const c = this.channels[ch];
@@ -71,9 +72,13 @@ export class Walker {
   }
 }
 
+// What the page holds at most: the changes of all 16 inputs together.  A capture with more is cut where it reaches
+// this many, and says so (cut).  Each change is 4 bytes here, and is copied once more for the decoders.
+export const MAX_EDGES = 30000000;
+
 // Raw samples to a capture.  words: a Uint16Array, one 16-bit sample each: bits 7-0 pod A, bits 15-8 pod B.
-export function fromWords(words, sampleRate, source = '') {
-  const n = words.length;
+export function fromWords(words, sampleRate, source = '', maxEdges = Infinity) {
+  let n = words.length, total = 0, cut = null;
   const bufs = Array.from({ length: NCH }, () => new EdgeBuf());
   let prev = n ? words[0] & 0xFFFF : 0;
   const first = prev;
@@ -81,6 +86,8 @@ export function fromWords(words, sampleRate, source = '') {
     const v = words[i] & 0xFFFF;
     if (v !== prev) {
       let d = v ^ prev;
+      if (total + bitCount(d) > maxEdges) { cut = { at: i, of: n }; n = i; break; }
+      total += bitCount(d);
       while (d) {
         bufs[31 - Math.clz32(d & -d)].push(i);
         d &= d - 1;
@@ -89,29 +96,58 @@ export function fromWords(words, sampleRate, source = '') {
     }
   }
   const channels = bufs.map((b, ch) => ({ initial: first >> ch & 1, edges: b.done() }));
-  return new Capture({ sampleRate, numSamples: n, channels, source });
+  return Object.assign(new Capture({ sampleRate, numSamples: n, channels, source }), { cut });
+}
+
+function bitCount(d) {
+  let n = 0;
+  for (; d; d &= d - 1) n++;
+  return n;
 }
 
 // The board's run-length words to a capture of at most numSamples samples.  Bits 15:0 of a word are the 16 inputs,
-// bits 31:16 how many more sample periods they stayed like that: a word covers 1 ... 65536 samples.
-export function fromRle(words, sampleRate, numSamples = Infinity, source = '') {
-  const bufs = Array.from({ length: NCH }, () => new EdgeBuf());
-  let pos = 0, prev = -1, first = 0;
-  for (let i = 0; i < words.length && pos < numSamples; i++) {
+// bits 31:16 how many more sample periods they stayed like that: a word covers 1 ... 65536 samples.  The changes
+// are counted first, so that each channel's list is made at its size, and a capture with more than maxEdges is
+// cut at the word that would pass it: its cut is then { at: that sample, of: the samples the words hold }.
+export function fromRle(words, sampleRate, numSamples = Infinity, source = '', maxEdges = Infinity) {
+  const counts = new Uint32Array(NCH);
+  let pos = 0, prev = -1, total = 0, end = 0, cut = null;
+  for (; end < words.length && pos < numSamples; end++) {
+    const w = words[end], v = w & 0xFFFF;
+    if (prev >= 0 && v !== prev) {
+      let d = v ^ prev;
+      const n = bitCount(d);
+      if (total + n > maxEdges) { cut = { at: pos }; break; }
+      total += n;
+      for (; d; d &= d - 1) counts[31 - Math.clz32(d & -d)]++;
+    }
+    prev = v;
+    pos += (w >>> 16) + 1;
+  }
+  if (cut) {                                // how long the whole would have been, for the message
+    let all = pos;
+    for (let i = end; i < words.length && all < numSamples; i++) all += (words[i] >>> 16) + 1;
+    cut.of = Math.min(all, numSamples);
+  }
+  const lists = Array.from(counts, (n) => new Uint32Array(n)), at = new Uint32Array(NCH);
+  let first = 0;
+  pos = 0; prev = -1;
+  for (let i = 0; i < end; i++) {
     const w = words[i], v = w & 0xFFFF;
     if (prev < 0) first = v;
     else if (v !== prev) {
-      let d = v ^ prev;
-      while (d) {
-        bufs[31 - Math.clz32(d & -d)].push(pos);
-        d &= d - 1;
+      for (let d = v ^ prev; d; d &= d - 1) {
+        const ch = 31 - Math.clz32(d & -d);
+        lists[ch][at[ch]++] = pos;
       }
     }
     prev = v;
     pos += (w >>> 16) + 1;
   }
-  const channels = bufs.map((b, ch) => ({ initial: first >> ch & 1, edges: b.done() }));
-  return new Capture({ sampleRate, numSamples: Math.min(pos, numSamples), channels, source });
+  const channels = lists.map((edges, ch) => ({ initial: first >> ch & 1, edges }));
+  const cap = new Capture({ sampleRate, numSamples: cut ? cut.at : Math.min(pos, numSamples), channels, source });
+  cap.cut = cut;
+  return cap;
 }
 
 // ---- files: "LB16CAP1", the header's length, the header as JSON (padded to a multiple of 4), the edge lists ----
@@ -136,18 +172,58 @@ export function isCaptureFile(buf) {
   return buf.byteLength >= 12 && new TextDecoder().decode(new Uint8Array(buf, 0, 8)) === MAGIC;
 }
 
-export function decodeCapture(buf) {
-  if (!isCaptureFile(buf)) throw new Error('not a Logic Boole capture file');
+// A saved capture.  What cannot be shown as one is refused, with the reason (an Error), before anything of it is
+// used.  maxEdges: as fromRle; a capture with more changes is cut at the sample where they reach it.
+export function decodeCapture(buf, maxEdges = Infinity) {
+  if (!isCaptureFile(buf)) throw new Error('it is not a Logic Boole capture (.lb16)');
+  const bad = (why) => new Error(`it is not a capture the app can show: ${why}`);
   const len = new DataView(buf).getUint32(8, true);
-  const head = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 12, len)));
-  let at = 12 + len;
-  const channels = head.channels.map(c => {
+  if (12 + len > buf.byteLength) throw new Error('the file is cut short: it ends inside its header');
+  let head;
+  try {
+    head = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 12, len)));
+  } catch {
+    throw bad('its header cannot be read');
+  }
+  if (!head || typeof head !== 'object' || Array.isArray(head)) throw bad('its header is empty');
+  const rate = head.sampleRate, n = head.numSamples;
+  if (typeof rate !== 'number' || !(rate > 0) || !Number.isFinite(rate)) throw bad('it gives no sample rate');
+  if (!Number.isInteger(n) || n < 1 || n > 2 ** 32) throw bad('it holds no samples, or a number of them the app cannot count');
+  const list = head.channels;
+  if (!Array.isArray(list)) throw bad('it lists no channels');
+  if (list.length !== NCH) throw bad(`it has ${list.length} channel${list.length === 1 ? '' : 's'}, and the app shows captures of ${NCH}`);
+  let at = 12 + len, total = 0;
+  list.forEach((c, ch) => {
+    if (!c || (c.initial !== 0 && c.initial !== 1) || !Number.isInteger(c.edges) || c.edges < 0) throw bad(`channel ${CH_IDS[ch]} is not described as a channel is`);
+    total += c.edges;
+  });
+  if (at + 4 * total > buf.byteLength) throw new Error('the file is cut short: it ends before the last of its channels\' changes');
+  let channels = list.map((c, ch) => {
     const edges = new Uint32Array(buf.slice(at, at + 4 * c.edges));
     at += 4 * c.edges;
+    for (let i = 0; i < edges.length; i++) {
+      if (i && edges[i] <= edges[i - 1]) throw bad(`the changes of ${CH_IDS[ch]} are not in order`);
+    }
+    if (edges.length && edges[edges.length - 1] >= n) throw bad(`${CH_IDS[ch]} changes after the capture's last sample`);
     return { initial: c.initial, edges };
   });
-  const cap = new Capture({ ...head, channels });
-  return { cap, head };
+  let numSamples = n, cut = null;
+  if (total > maxEdges) {                   // the last sample before which there are no more than maxEdges changes
+    const before = (s) => channels.reduce((k, c) => k + lowerBound(c.edges, s), 0);
+    let lo = 0, hi = n;
+    while (lo < hi) { const m = Math.floor((lo + hi + 1) / 2); if (before(m) <= maxEdges) lo = m; else hi = m - 1; }
+    cut = { at: lo, of: n };
+    numSamples = lo;
+    channels = channels.map(c => ({ initial: c.initial, edges: c.edges.slice(0, lowerBound(c.edges, lo)) }));
+  }
+  const trigger = Number.isInteger(head.trigger) && head.trigger >= 0 && head.trigger <= n ? head.trigger : 0;
+  const gaps = Array.isArray(head.gaps) ? head.gaps.filter(g => g && Number.isFinite(g.start) && Number.isFinite(g.length)) : [];
+  const info = head.info && typeof head.info === 'object' && !Array.isArray(head.info) ? head.info : null;
+  const cap = new Capture({ sampleRate: rate, numSamples, channels, trigger, gaps, info,
+    source: typeof head.source === 'string' ? head.source : '' });
+  cap.cut = cut;
+  const names = Array.isArray(head.names) ? head.names.map(x => typeof x === 'string' ? x : '') : [];
+  return { cap, head: { ...head, names, analyzers: Array.isArray(head.analyzers) ? head.analyzers : [] } };
 }
 
 // ---- text ----
